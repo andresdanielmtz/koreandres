@@ -1,6 +1,8 @@
 # Koreandres
 
-A whiteboard for planning trips.
+## A whiteboard for planning trips.
+
+![Readme Image]("docs/readme.png")
 
 Most trip planners make you fill in a form. This one gives you a canvas. Days
 run down the left as a continuous timeline, and you drop blocks onto it for the
