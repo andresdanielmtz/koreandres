@@ -83,16 +83,21 @@ export function useViewport(
   useEffect(() => {
     const down = () => (downRef.current = true)
     const up = () => (downRef.current = false)
-    const onResize = () => apply(viewRef.current)
     window.addEventListener('pointerdown', down, true)
     window.addEventListener('pointerup', up, true)
     window.addEventListener('pointercancel', up, true)
-    window.addEventListener('resize', onResize)
+
+    // The viewport shares the window with the map pane, so it can change size
+    // without the window doing — dragging the divider has to re-contain the
+    // pan too. Watching the element covers window resizes as well.
+    const observer = new ResizeObserver(() => apply(viewRef.current))
+    if (viewportRef.current) observer.observe(viewportRef.current)
+
     return () => {
       window.removeEventListener('pointerdown', down, true)
       window.removeEventListener('pointerup', up, true)
       window.removeEventListener('pointercancel', up, true)
-      window.removeEventListener('resize', onResize)
+      observer.disconnect()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
