@@ -19,14 +19,20 @@ function stored(): ThemeMode {
  */
 export function useTheme() {
   const [mode, setMode] = useState<ThemeMode>(stored)
+  /* The concrete answer, for the things CSS variables can't reach — the map
+     is built with a colour scheme rather than styled with one. */
+  const [resolved, setResolved] = useState<'light' | 'dark'>(() =>
+    document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+  )
 
   useEffect(() => {
     localStorage.setItem(THEME_KEY, mode)
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
 
     const apply = () => {
-      document.documentElement.dataset.theme =
-        mode === 'system' ? (mq.matches ? 'dark' : 'light') : mode
+      const next = mode === 'system' ? (mq.matches ? 'dark' : 'light') : mode
+      document.documentElement.dataset.theme = next
+      setResolved(next)
     }
 
     apply()
@@ -34,5 +40,5 @@ export function useTheme() {
     return () => mq.removeEventListener('change', apply)
   }, [mode])
 
-  return { mode, setMode }
+  return { mode, setMode, resolved }
 }
