@@ -41,6 +41,12 @@ export function CanvasBlockView({
 }: Props) {
   const travel = block.kind === 'travel'
 
+  /** Double-click a field to edit that field, rather than falling back to the title. */
+  const open = (field: Exclude<EditField, null>) => (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onEdit(field)
+  }
+
   return (
     <div
       className="cblock"
@@ -82,6 +88,7 @@ export function CanvasBlockView({
         placeholder={travel ? 'Line 2 → Hongik Univ · 24 min' : 'Notes, prices, hours…'}
         editing={editing === 'body'}
         multiline
+        onOpen={open('body')}
         onCommit={(body) => onPatch({ body })}
         onDone={onEditDone}
       />
@@ -96,16 +103,21 @@ export function CanvasBlockView({
           onDone={onEditDone}
         />
       ) : block.url ? (
-        <a
-          className="cblock-url"
-          href={block.url}
-          target="_blank"
-          rel="noreferrer"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <IconExternal size={11} />
-          <span>{hostOf(block.url)}</span>
-        </a>
+        // The row runs the width of the block; double-clicking beside the pill
+        // edits the URL, double-clicking the pill itself is left to the link.
+        <div className="cblock-url-row" onDoubleClick={open('url')}>
+          <a
+            className="cblock-url"
+            href={block.url}
+            target="_blank"
+            rel="noreferrer"
+            onPointerDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            <IconExternal size={11} />
+            <span>{hostOf(block.url)}</span>
+          </a>
+        </div>
       ) : null}
 
       <div className="cblock-actions">

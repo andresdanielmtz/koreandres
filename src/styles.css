@@ -835,6 +835,11 @@ kbd {
   overflow: hidden;
 }
 
+.cblock-url-row {
+  display: flex;
+  min-width: 0;
+}
+
 .cblock-url {
   display: inline-flex;
   align-items: center;
