@@ -64,6 +64,8 @@ export type Snapshot = {
   links: Link[]
 }
 
+export type Point = { x: number; y: number }
+
 export type Rect = { x: number; y: number; w: number; h: number }
 
 /** An axis-aligned box in board space, as edges rather than size. */

@@ -11,8 +11,16 @@ import {
   MIN_PER_DAY,
   PX_PER_MIN,
 } from '../lib/constants'
-import { boardBounds, canvasRect, packLanes, timelineRect } from '../lib/geometry'
+import {
+  boardBounds,
+  canvasRect,
+  packLanes,
+  rectFromPoints,
+  rectsOverlap,
+  timelineRect,
+} from '../lib/geometry'
 import { clamp, dayTop, formatTime, snap, timeToY, yToTime } from '../lib/time'
+import { refEq } from '../lib/types'
 import type { CanvasBlock, ColorName, Ref, Rect, Snapshot } from '../lib/types'
 import type { Itinerary } from '../state/useItinerary'
 import { useTheme } from '../state/useTheme'
@@ -55,12 +63,13 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
   const viewport = useViewport(viewportRef, contentRef, boardBounds(board.days, canvas))
   const theme = useTheme()
 
-  const [selection, setSelection] = useState<Ref | null>(null)
+  const [selection, setSelection] = useState<Ref[]>([])
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
   const [editing, setEditing] = useState<Editing | null>(null)
   const [menu, setMenu] = useState<Menu | null>(null)
   const [draft, setDraft] = useState<DraftState | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [marquee, setMarquee] = useState<Rect | null>(null)
 
   const lanes = packLanes(timeline)
 
@@ -81,11 +90,38 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     return b?.color ?? 'slate'
   }
 
-  const isSelected = (ref: Ref) =>
-    selection?.kind === ref.kind && selection.id === ref.id
+  const isSelected = (ref: Ref) => selection.some((r) => refEq(r, ref))
 
   const editFieldFor = (ref: Ref): EditField | null =>
     editing && editing.ref.kind === ref.kind && editing.ref.id === ref.id ? editing.field : null
+
+  /**
+   * Ctrl/⌘+click toggles a block in and out of the selection; a plain click
+   * replaces it — except on a block that is already selected, which keeps the
+   * group so it can be dragged as one. That case collapses on release instead,
+   * once it's clear the pointer never moved.
+   */
+  function select(ref: Ref, additive: boolean) {
+    setSelection((prev) => {
+      const has = prev.some((r) => refEq(r, ref))
+      if (!additive) return has ? prev : [ref]
+      return has ? prev.filter((r) => !refEq(r, ref)) : [...prev, ref]
+    })
+  }
+
+  /** Duplicate every block in `refs`; returns the copies, to select in turn. */
+  function duplicateAll(refs: Ref[]): Ref[] {
+    return refs.flatMap((ref) => {
+      const copy = itinerary.duplicateBlock(ref)
+      return copy ? [copy] : []
+    })
+  }
+
+  function removeAll(refs: Ref[]) {
+    // `removeBlock` reads `snapRef`, so a loop sees each previous removal.
+    for (const ref of refs) itinerary.removeBlock(ref)
+    setSelection([])
+  }
 
   /* --------------------------------------------------------------- drags -- */
 
@@ -124,26 +160,52 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     window.addEventListener('pointercancel', end)
   }
 
-  function grabTimeline(e: React.PointerEvent, id: string) {
+  /**
+   * Grab a block. Whatever else is selected comes with it, so a multi-selection
+   * moves as one — timeline blocks still re-derive their day and time from the
+   * dragged y, so they keep snapping; canvas blocks just take the raw delta.
+   */
+  function grabBlock(e: React.PointerEvent, ref: Ref) {
     if (e.button !== 0 || viewport.spaceHeld) return
-    const block = timeline.find((b) => b.id === id)
-    if (!block) return
     e.stopPropagation()
-    setSelection({ kind: 'timeline', id })
-    setSelectedLink(null)
-    if (editing?.ref.id !== id) setEditing(null)
+    const additive = e.metaKey || e.ctrlKey
+    const refs = isSelected(ref) ? selection : [ref]
 
-    const duration = block.endMin - block.startMin
-    const originY = timeToY(block.dayIndex, block.startMin)
+    select(ref, additive)
+    setSelectedLink(null)
+    if (editing?.ref.id !== ref.id) setEditing(null)
+    // Ctrl+click is a selection gesture — dragging from it would fight the toggle.
+    if (additive) return
+
+    const canvasFrom = refs.flatMap((r) => {
+      const b = r.kind === 'canvas' ? canvas.find((x) => x.id === r.id) : null
+      return b ? [{ id: b.id, x: b.x, y: b.y }] : []
+    })
+    const timelineFrom = refs.flatMap((r) => {
+      const b = r.kind === 'timeline' ? timeline.find((x) => x.id === r.id) : null
+      return b ? [{ id: b.id, y: timeToY(b.dayIndex, b.startMin), span: b.endMin - b.startMin }] : []
+    })
 
     startDrag(
       e,
-      (_dx, dy) => {
-        const { dayIndex, minute } = yToTime(originY + dy, board.days)
-        const startMin = clamp(snap(minute), 0, MIN_PER_DAY - duration)
-        itinerary.updateTimeline(id, { dayIndex, startMin, endMin: startMin + duration }, false)
+      (dx, dy) => {
+        for (const o of canvasFrom) {
+          itinerary.updateCanvas(o.id, { x: Math.round(o.x + dx), y: Math.round(o.y + dy) }, false)
+        }
+        for (const o of timelineFrom) {
+          const { dayIndex, minute } = yToTime(o.y + dy, board.days)
+          const startMin = clamp(snap(minute), 0, MIN_PER_DAY - o.span)
+          itinerary.updateTimeline(o.id, { dayIndex, startMin, endMin: startMin + o.span }, false)
+        }
       },
-      (moved) => moved && itinerary.commitTimeline(id),
+      (moved) => {
+        if (!moved) {
+          if (refs.length > 1) setSelection([ref])
+          return
+        }
+        for (const o of canvasFrom) itinerary.commitCanvas(o.id)
+        for (const o of timelineFrom) itinerary.commitTimeline(o.id)
+      },
     )
   }
 
@@ -152,7 +214,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     const block = timeline.find((b) => b.id === id)
     if (!block) return
     e.stopPropagation()
-    setSelection({ kind: 'timeline', id })
+    setSelection([{ kind: 'timeline', id }])
 
     const start0 = block.startMin
     const end0 = block.endMin
@@ -173,33 +235,12 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     )
   }
 
-  function grabCanvas(e: React.PointerEvent, id: string) {
-    if (e.button !== 0 || viewport.spaceHeld) return
-    const block = canvas.find((b) => b.id === id)
-    if (!block) return
-    e.stopPropagation()
-    setSelection({ kind: 'canvas', id })
-    setSelectedLink(null)
-    if (editing?.ref.id !== id) setEditing(null)
-
-    const x0 = block.x
-    const y0 = block.y
-
-    startDrag(
-      e,
-      (dx, dy) => {
-        itinerary.updateCanvas(id, { x: Math.round(x0 + dx), y: Math.round(y0 + dy) }, false)
-      },
-      (moved) => moved && itinerary.commitCanvas(id),
-    )
-  }
-
   function resizeCanvas(e: React.PointerEvent, id: string, dir: ResizeDir) {
     if (e.button !== 0) return
     const block = canvas.find((b) => b.id === id)
     if (!block) return
     e.stopPropagation()
-    setSelection({ kind: 'canvas', id })
+    setSelection([{ kind: 'canvas', id }])
 
     const { x, y, width, height } = block
     const west = dir.includes('w')
@@ -243,7 +284,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
   function startLink(e: React.PointerEvent, source: Ref) {
     if (e.button !== 0) return
     e.stopPropagation()
-    setSelection(source)
+    setSelection([source])
     setEditing(null)
 
     const point = viewport.toBoard(e.clientX, e.clientY)
@@ -267,7 +308,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
       const hit = refAt(ev.clientX, ev.clientY)
       if (hit && hit.id !== source.id) {
         itinerary.addLink(source, hit)
-        setSelection(hit)
+        setSelection([hit])
       } else {
         // Dropped on nothing: spawn the data block the link was reaching for.
         const at = viewport.toBoard(ev.clientX, ev.clientY)
@@ -276,7 +317,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         })
         if (created) {
           itinerary.addLink(source, { kind: 'canvas', id: created.id })
-          setSelection({ kind: 'canvas', id: created.id })
+          setSelection([{ kind: 'canvas', id: created.id }])
           setEditing({ ref: { kind: 'canvas', id: created.id }, field: 'title' })
         }
       }
@@ -328,7 +369,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         icon: <IconCopy size={13} />,
         onSelect: () => {
           const copy = itinerary.duplicateBlock(ref)
-          if (copy) setSelection(copy)
+          if (copy) setSelection([copy])
         },
       },
       { kind: 'separator' },
@@ -338,10 +379,39 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         hint: '⌫',
         icon: <IconTrash size={13} />,
         danger: true,
+        onSelect: () => removeAll([ref]),
+      },
+    ]
+  }
+
+  /** Right-clicking inside a multi-selection acts on all of it. */
+  function groupEntries(refs: Ref[]): MenuEntry[] {
+    return [
+      { kind: 'label', text: `${refs.length} blocks` },
+      {
+        kind: 'colors',
+        value: colorFor(refs[0]),
+        onPick: (c) => refs.forEach((r) => itinerary.setColor(r, c)),
+      },
+      { kind: 'separator' },
+      {
+        kind: 'item',
+        label: 'Duplicate',
+        hint: '⌘D',
+        icon: <IconCopy size={13} />,
         onSelect: () => {
-          itinerary.removeBlock(ref)
-          setSelection(null)
+          const copies = duplicateAll(refs)
+          if (copies.length) setSelection(copies)
         },
+      },
+      { kind: 'separator' },
+      {
+        kind: 'item',
+        label: `Delete ${refs.length} blocks`,
+        hint: '⌫',
+        icon: <IconTrash size={13} />,
+        danger: true,
+        onSelect: () => removeAll(refs),
       },
     ]
   }
@@ -352,7 +422,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     const { dayIndex, minute } = yToTime(at.y, board.days)
     const onRail = at.x > -GUTTER_W - 260 && at.x < LANE_X + LANE_W + 60
 
-    setSelection(null)
+    setSelection([])
     setSelectedLink(null)
     setMenu({
       x: e.clientX,
@@ -365,7 +435,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
           onSelect: () => {
             const created = itinerary.addCanvasBlock('data', at.x, at.y)
             if (created) {
-              setSelection({ kind: 'canvas', id: created.id })
+              setSelection([{ kind: 'canvas', id: created.id }])
               setEditing({ ref: { kind: 'canvas', id: created.id }, field: 'title' })
             }
           },
@@ -377,7 +447,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
           onSelect: () => {
             const created = itinerary.addCanvasBlock('travel', at.x, at.y)
             if (created) {
-              setSelection({ kind: 'canvas', id: created.id })
+              setSelection([{ kind: 'canvas', id: created.id }])
               setEditing({ ref: { kind: 'canvas', id: created.id }, field: 'title' })
             }
           },
@@ -391,7 +461,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
           onSelect: () => {
             const created = itinerary.addTimelineBlock(dayIndex, minute)
             if (created) {
-              setSelection({ kind: 'timeline', id: created.id })
+              setSelection([{ kind: 'timeline', id: created.id }])
               setEditing({ ref: { kind: 'timeline', id: created.id }, field: 'title' })
             }
           },
@@ -411,9 +481,14 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
   function openBlockMenu(e: React.MouseEvent, ref: Ref) {
     e.preventDefault()
     e.stopPropagation()
-    setSelection(ref)
+    const group = isSelected(ref) && selection.length > 1
+    if (!group) setSelection([ref])
     setSelectedLink(null)
-    setMenu({ x: e.clientX, y: e.clientY, entries: blockEntries(ref) })
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      entries: group ? groupEntries(selection) : blockEntries(ref),
+    })
   }
 
   function openLinkMenu(e: React.MouseEvent, id: string) {
@@ -456,6 +531,54 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     viewport.panBy(0, (anchored - dayTop(clamp(next, 0, board.days - 1))) * v.scale)
   }
 
+  /* -------------------------------------------------------------- marquee -- */
+
+  /** Every block the box touches. */
+  function refsIn(box: Rect): Ref[] {
+    const hits: Ref[] = []
+    for (const b of canvas) {
+      if (rectsOverlap(box, canvasRect(b))) hits.push({ kind: 'canvas', id: b.id })
+    }
+    for (const b of timeline) {
+      if (rectsOverlap(box, timelineRect(b, lanes.get(b.id)))) {
+        hits.push({ kind: 'timeline', id: b.id })
+      }
+    }
+    return hits
+  }
+
+  /**
+   * Ctrl/⌘+drag on empty space draws a selection box. It's the same modifier
+   * that adds one block at a time, so whatever the box catches joins the
+   * selection instead of replacing it. A plain drag still pans.
+   */
+  function startMarquee(e: React.PointerEvent) {
+    const from = viewport.toBoard(e.clientX, e.clientY)
+    setSelectedLink(null)
+    setEditing(null)
+    setMarquee(rectFromPoints(from, from))
+
+    const boxAt = (ev: PointerEvent) =>
+      rectFromPoints(from, viewport.toBoard(ev.clientX, ev.clientY))
+
+    const move = (ev: PointerEvent) => setMarquee(boxAt(ev))
+    const end = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+      const box = boxAt(ev)
+      setMarquee(null)
+      // A stray Ctrl+click on the background isn't a box — leave the selection be.
+      if (box.w < 3 && box.h < 3) return
+      const hits = refsIn(box)
+      setSelection((prev) => [...prev, ...hits.filter((r) => !prev.some((p) => refEq(p, r)))])
+    }
+
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+  }
+
   /* ------------------------------------------------------------ background -- */
 
   function onBackgroundDown(e: React.PointerEvent) {
@@ -468,7 +591,12 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
       return
     }
     if (onBlock) return
-    setSelection(null)
+    if (e.metaKey || e.ctrlKey) {
+      e.preventDefault()
+      startMarquee(e)
+      return
+    }
+    setSelection([])
     setSelectedLink(null)
     setEditing(null)
     viewport.beginPan(e)
@@ -477,8 +605,10 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
   function onBackgroundDoubleClick(e: React.MouseEvent) {
     const el = e.target as HTMLElement
     // Controls sitting over the board get double-clicked too — twice on "next
-    // day" shouldn't also drop a block behind it.
+    // day" shouldn't also drop a block behind it. A held modifier means the
+    // gesture was two stabs at a marquee, not a request for a block.
     if (el.closest('[data-ref]') || el.closest('button') || el.closest('a')) return
+    if (e.metaKey || e.ctrlKey) return
     const at = viewport.toBoard(e.clientX, e.clientY)
     const onRail = at.x > -GUTTER_W && at.x < LANE_X + LANE_W + 24
 
@@ -486,13 +616,13 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
       const { dayIndex, minute } = yToTime(at.y, board.days)
       const created = itinerary.addTimelineBlock(dayIndex, minute)
       if (created) {
-        setSelection({ kind: 'timeline', id: created.id })
+        setSelection([{ kind: 'timeline', id: created.id }])
         setEditing({ ref: { kind: 'timeline', id: created.id }, field: 'title' })
       }
     } else {
       const created = itinerary.addCanvasBlock('data', at.x, at.y - 40)
       if (created) {
-        setSelection({ kind: 'canvas', id: created.id })
+        setSelection([{ kind: 'canvas', id: created.id }])
         setEditing({ ref: { kind: 'canvas', id: created.id }, field: 'title' })
       }
     }
@@ -506,7 +636,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
 
       if (e.key === 'Escape') {
         setMenu(null)
-        setSelection(null)
+        setSelection([])
         setSelectedLink(null)
         setEditing(null)
         return
@@ -516,22 +646,22 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
           e.preventDefault()
           itinerary.removeLink(selectedLink)
           setSelectedLink(null)
-        } else if (selection) {
+        } else if (selection.length) {
           e.preventDefault()
-          itinerary.removeBlock(selection)
-          setSelection(null)
+          removeAll(selection)
         }
         return
       }
-      if (e.key === 'Enter' && selection) {
+      // Rename only makes sense for one block at a time.
+      if (e.key === 'Enter' && selection.length === 1) {
         e.preventDefault()
-        setEditing({ ref: selection, field: 'title' })
+        setEditing({ ref: selection[0], field: 'title' })
         return
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selection) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selection.length) {
         e.preventDefault()
-        const copy = itinerary.duplicateBlock(selection)
-        if (copy) setSelection(copy)
+        const copies = duplicateAll(selection)
+        if (copies.length) setSelection(copies)
         return
       }
       if (e.key === '0' && !e.metaKey && !e.ctrlKey) viewport.reset()
@@ -618,7 +748,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
             selected={selectedLink}
             onSelect={(id) => {
               setSelectedLink(id)
-              setSelection(null)
+              setSelection([])
             }}
             onContext={openLinkMenu}
             draft={draftLine}
@@ -634,7 +764,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
                 editing={editFieldFor(ref)}
                 targeted={isTargeted(ref)}
                 linking={!!draft}
-                onGrab={(e) => grabCanvas(e, block.id)}
+                onGrab={(e) => grabBlock(e, ref)}
                 onResize={(e, dir) => resizeCanvas(e, block.id, dir)}
                 onPort={(e) => startLink(e, ref)}
                 onContext={(e) => openBlockMenu(e, ref)}
@@ -656,7 +786,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
                 editing={editFieldFor(ref) === 'title'}
                 targeted={isTargeted(ref)}
                 linking={!!draft}
-                onGrab={(e) => grabTimeline(e, block.id)}
+                onGrab={(e) => grabBlock(e, ref)}
                 onResize={(e, edge) => resizeTimeline(e, block.id, edge)}
                 onPort={(e) => startLink(e, ref)}
                 onContext={(e) => openBlockMenu(e, ref)}
@@ -666,6 +796,21 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
               />
             )
           })}
+
+          {marquee && (
+            <div
+              className="marquee"
+              style={{
+                left: marquee.x,
+                top: marquee.y,
+                width: marquee.w,
+                height: marquee.h,
+                // The box rides inside the scaled content, so the border is
+                // divided back out to stay a hairline at any zoom.
+                borderWidth: 1 / viewport.scale,
+              }}
+            />
+          )}
         </div>
 
         <div className="day-nav">
@@ -679,7 +824,8 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
 
         <div className="hints">
           <kbd>Scroll</kbd> pan · <kbd>⌘</kbd>+scroll zoom · <kbd>Space</kbd> drag ·{' '}
-          <kbd>Right-click</kbd> menu · <kbd>Double-click</kbd> new block
+          <kbd>⌘</kbd>+click or drag multi-select · <kbd>Right-click</kbd> menu ·{' '}
+          <kbd>Double-click</kbd> new block
         </div>
       </div>
 

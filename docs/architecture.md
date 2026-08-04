@@ -78,6 +78,25 @@ size, which lets it draw at negative coordinates without any viewBox juggling.
 Lines use `vector-effect="non-scaling-stroke"` so they stay a hairline at every
 zoom level.
 
+## Selection
+
+Selection is a list of refs, and delete, duplicate, colour and drag all run over
+the whole list. Ctrl/⌘ is the modifier for everything that widens it: clicking a
+block with it held toggles that block in or out, and dragging on empty space
+with it held draws a marquee that adds whatever the box touches. Without the
+modifier a click on empty space clears the selection and a drag pans, which is
+why the marquee needs one at all.
+
+Clicking a block that's already selected is the awkward case, because it could
+mean either "select just this" or "start dragging the group". It keeps the group
+while the pointer is down and collapses to the one block on release, if the
+pointer never moved.
+
+The marquee is a plain div inside `.content`, positioned in board space, so it
+pans and zooms with everything else — only its border width is divided back out,
+to stay a hairline. Hit testing runs against the same `timelineRect` and
+`canvasRect` used to lay the blocks out, so it never reads the DOM.
+
 ## Saving
 
 `lib/store.ts` puts Supabase and local storage behind the same interface, and
@@ -130,8 +149,9 @@ change the other.
 Undo is the obvious gap. The state shape would make it straightforward, since
 every mutation goes through a handful of functions in `useItinerary`.
 
-Multi-select and rubber band selection aren't there either. Selection is a
-single optional block today, so that would ripple a bit further.
+Rubber banding only adds to the selection, since the modifier that starts it is
+the one that means "and this too". Replacing the selection with a box means
+clicking empty space first.
 
 Realtime would be nice for planning with other people, and Supabase gives you
 most of it for free, but it needs the auth work in

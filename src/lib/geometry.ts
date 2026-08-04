@@ -10,7 +10,7 @@ import {
   RAIL_RIGHT,
 } from './constants'
 import { dayTop, timeToY } from './time'
-import type { Bounds, CanvasBlock, Rect, Ref, TimelineBlock } from './types'
+import type { Bounds, CanvasBlock, Point, Rect, Ref, TimelineBlock } from './types'
 
 export type Lane = { lane: number; lanes: number }
 
@@ -113,6 +113,18 @@ export function boardBounds(days: number, canvas: CanvasBlock[]): Bounds {
     maxY: maxY + PAN_MARGIN,
   }
 }
+
+/** The box two corners span, dragged in any direction. */
+export const rectFromPoints = (a: Point, b: Point): Rect => ({
+  x: Math.min(a.x, b.x),
+  y: Math.min(a.y, b.y),
+  w: Math.abs(a.x - b.x),
+  h: Math.abs(a.y - b.y),
+})
+
+/** Touching counts as a hit, so a marquee only has to graze a block. */
+export const rectsOverlap = (a: Rect, b: Rect) =>
+  a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h
 
 /* ----------------------------------------------------------------- links -- */
 

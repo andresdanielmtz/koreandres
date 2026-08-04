@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { MAX_ZOOM, MIN_ZOOM } from '../lib/constants'
 import { clamp } from '../lib/time'
-import type { Bounds } from '../lib/types'
+import type { Bounds, Point } from '../lib/types'
 
 export type View = { x: number; y: number; scale: number }
-export type Point = { x: number; y: number }
+export type { Point }
 
 /** Opens on 08:00 of day one rather than at midnight. */
 const INITIAL: View = { x: 320, y: -392, scale: 1 }

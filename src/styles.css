@@ -488,6 +488,13 @@ kbd {
   pointer-events: none;
 }
 
+.marquee {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  pointer-events: none;
+}
+
 .day-nav {
   position: absolute;
   left: 12px;

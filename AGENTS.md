@@ -142,6 +142,14 @@ across all four tables), not a config change.
 
 ## Known gaps
 
-Undo, multi-select / rubber-band selection, and realtime are all absent and
-known. Selection is a single optional `Ref` today, so multi-select ripples
-further than it looks. Realtime needs the auth work first.
+Undo and realtime are both absent and known. Realtime needs the auth work
+first.
+
+Selection is a `Ref[]`. Ctrl/⌘+click toggles a block in and out of it, and
+Ctrl/⌘+drag on empty space draws a marquee that adds everything it touches —
+the modifier is what distinguishes both from a plain click, which replaces the
+selection, and a plain drag, which pans. A plain click on a block that is
+already selected keeps the group together so it can be dragged, and collapses
+on release if the pointer never moved. Delete, duplicate, colour and drag all
+act on the whole selection, so anything new that reads `selection` should
+assume more than one. Realtime needs the auth work first.
