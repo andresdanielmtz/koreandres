@@ -43,6 +43,35 @@ export const CANVAS_DEFAULT_H = 132
 export const MIN_ZOOM = 0.25
 export const MAX_ZOOM = 2.5
 
+/* ------------------------------------------------------------------- map -- */
+
+/** Where the preview looks when nothing with a location is selected. */
+export const MAP_DEFAULT_CENTER = { lat: 37.5665, lng: 126.978 }
+export const MAP_DEFAULT_ZOOM = 11
+export const MAP_DEFAULT_LABEL = 'Seoul'
+
+/** How long the camera takes to fly from one place to the next. */
+export const MAP_FLIGHT_MS = 1000
+/** How far the camera pulls back mid-flight, per doubling of the distance it
+ *  has to cover, and the most it will ever pull back. This is the number that
+ *  decides whether a hop reads as a glide or a flash — one zoom level is twice
+ *  as much ground, so it doesn't take much. */
+export const MAP_FLIGHT_DIP = 0.5
+export const MAP_FLIGHT_DIP_MAX = 2
+/** Zoom the camera may settle at. A geocoded viewport picks within this. */
+export const MAP_MIN_ZOOM = 3
+export const MAP_MAX_ZOOM = 16
+/** Held back from the exact fit, so a place sits in its surroundings instead
+ *  of filling the pane. One level is twice as much ground. */
+export const MAP_ZOOM_BACKOFF = 1.4
+/** Bare coordinates carry no viewport to fit, so they land here. */
+export const MAP_POINT_ZOOM = 15
+
+/** Width of the preview pane, and how far the divider may be dragged. */
+export const MAP_PANE_DEFAULT = 460
+export const MAP_PANE_MIN = 280
+export const MAP_PANE_MAX_RATIO = 0.7
+
 /* ---------------------------------------------------------------- colors -- */
 
 export const COLORS: ColorName[] = [
