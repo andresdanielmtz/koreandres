@@ -33,9 +33,22 @@ export const MAPS_KEY_VAR = 'VITE_GOOGLE_MAPS_API_KEY'
 const mapId = (import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string | undefined)?.trim()
 const mapIdDark = (import.meta.env.VITE_GOOGLE_MAPS_MAP_ID_DARK as string | undefined)?.trim()
 
+export const DEMO_MAP_ID = 'DEMO_MAP_ID'
+
 /** Falls back to the light ID, then to Google's demo one. */
 export const mapIdFor = (theme: 'light' | 'dark') =>
-  (theme === 'dark' ? mapIdDark || mapId : mapId) || 'DEMO_MAP_ID'
+  (theme === 'dark' ? mapIdDark || mapId : mapId) || DEMO_MAP_ID
+
+/**
+ * Whether the map should be told which colour scheme to draw.
+ *
+ * Setting a *second*, dark Map ID is someone saying "I handle light and dark
+ * by swapping styles" — so the app stops asking, and lets each style speak for
+ * itself. Short of that we always ask, because `colorScheme` is the only thing
+ * that gives the map a dark mode at all, and losing it is a worse outcome than
+ * a style whose variants and the requested scheme disagree.
+ */
+export const usesColorScheme = !mapIdDark
 
 const MAPS_HOST = /(^|\.)(google\.[a-z.]+|goo\.gl)$/
 const SHORT_HOST = /(^|\.)goo\.gl$/

@@ -17,6 +17,7 @@ import {
   mapIdFor,
   parseLatLng,
   queryFor,
+  usesColorScheme,
   zoomForBounds,
 } from '../lib/maps'
 import { clamp } from '../lib/time'
@@ -248,8 +249,15 @@ export function useGoogleMap(
         mapRef.current = new google.maps.Map(el, {
           ...from,
           mapId: mapIdFor(theme),
-          colorScheme:
-            theme === 'dark' ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT,
+          // Left off only when a dark Map ID says the styles handle it.
+          ...(usesColorScheme
+            ? {
+                colorScheme:
+                  theme === 'dark'
+                    ? google.maps.ColorScheme.DARK
+                    : google.maps.ColorScheme.LIGHT,
+              }
+            : {}),
           disableDefaultUI: true,
           zoomControl: true,
           clickableIcons: false,
