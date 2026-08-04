@@ -50,6 +50,12 @@ const timelineFromRow = (r: Row): TimelineBlock => ({
   dayIndex: r.day_index as number,
   startMin: r.start_min as number,
   endMin: r.end_min as number,
+  place: (r.place as string) ?? '',
+  placeLabel: (r.place_label as string) ?? '',
+  placeLat: (r.place_lat as number | null) ?? null,
+  placeLng: (r.place_lng as number | null) ?? null,
+  placeZoom: (r.place_zoom as number | null) ?? null,
+  url: (r.url as string) ?? '',
   color: (r.color as ColorName) ?? 'blue',
 })
 
@@ -61,6 +67,12 @@ const timelineToRow = (b: TimelineBlock): Row => ({
   day_index: b.dayIndex,
   start_min: Math.round(b.startMin),
   end_min: Math.round(b.endMin),
+  place: b.place,
+  place_label: b.placeLabel,
+  place_lat: b.placeLat,
+  place_lng: b.placeLng,
+  place_zoom: b.placeZoom,
+  url: b.url,
   color: b.color,
 })
 
@@ -253,7 +265,21 @@ function createLocalStore(): ItineraryStore {
     async loadBoard(id) {
       const snap = readDb()[id]
       if (!snap) throw new Error('Board not found')
-      return snap
+      // Boards saved before the location fields existed are still on disk.
+      // Fill the gaps on read — the cloud store gets the same for free from
+      // its column defaults.
+      return {
+        ...snap,
+        timeline: snap.timeline.map((b) => ({
+          ...b,
+          place: b.place ?? '',
+          placeLabel: b.placeLabel ?? '',
+          placeLat: b.placeLat ?? null,
+          placeLng: b.placeLng ?? null,
+          placeZoom: b.placeZoom ?? null,
+          url: b.url ?? '',
+        })),
+      }
     },
 
     async upsertTimeline(block) {

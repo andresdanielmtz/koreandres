@@ -28,6 +28,18 @@ export type TimelineBlock = {
   /** Minutes from midnight, 0–1440. */
   startMin: number
   endMin: number
+  /** Exactly what was pasted into the location field: a Google Maps link,
+   *  coordinates, or a place name. Empty means "no location yet". */
+  place: string
+  /** What that resolved to, and where. Filled in once the geocoder answers,
+   *  and saved — so reopening a board flies straight there without asking
+   *  Google again. Cleared whenever `place` is edited. */
+  placeLabel: string
+  placeLat: number | null
+  placeLng: number | null
+  /** How close to stand, taken from the geocoded viewport. */
+  placeZoom: number | null
+  url: string
   color: ColorName
 }
 

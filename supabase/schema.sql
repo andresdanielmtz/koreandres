@@ -28,10 +28,35 @@ create table if not exists public.timeline_blocks (
   day_index  integer     not null default 0,
   start_min  integer     not null default 540  check (start_min >= 0 and start_min < 1440),
   end_min    integer     not null default 600  check (end_min   > 0 and end_min  <= 1440),
+  -- Where it is. `place` is what was pasted — a Maps link, coordinates or a
+  -- name — and the rest is what that resolved to, saved so reopening a board
+  -- doesn't ask Google to look it up again.
+  place       text       not null default '',
+  place_label text       not null default '',
+  place_lat   double precision,
+  place_lng   double precision,
+  place_zoom  double precision,
+  url         text       not null default '',
   color      text        not null default 'blue',
   created_at timestamptz not null default now(),
-  constraint timeline_blocks_span check (end_min > start_min)
+  constraint timeline_blocks_span check (end_min > start_min),
+  constraint timeline_blocks_place_point check (
+    (place_lat is null) = (place_lng is null)
+    and (place_lat is null or place_lat between -90 and 90)
+    and (place_lng is null or place_lng between -180 and 180)
+  )
 );
+
+-- `create table if not exists` leaves an existing table alone, so a project
+-- created before the map pane needs the columns added. This is the same thing
+-- supabase/migrations/001-block-locations.sql does on its own.
+alter table public.timeline_blocks
+  add column if not exists place       text not null default '',
+  add column if not exists place_label text not null default '',
+  add column if not exists place_lat   double precision,
+  add column if not exists place_lng   double precision,
+  add column if not exists place_zoom  double precision,
+  add column if not exists url         text not null default '';
 
 create index if not exists timeline_blocks_board_idx on public.timeline_blocks (board_id);
 

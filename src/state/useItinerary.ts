@@ -38,25 +38,39 @@ function seedContent(boardId: string): Omit<Snapshot, 'board'> {
     dayIndex: SEED_DAY,
     startMin: 10 * 60,
     endMin: 13 * 60,
+    // Seeded unresolved on purpose: the first look at the board is what
+    // geocodes them, and the answer is saved from there on.
+    place: 'Hongdae, Seoul',
+    placeLabel: '',
+    placeLat: null,
+    placeLng: null,
+    placeZoom: null,
+    url: '',
     color: 'blue',
   }
   const t2: TimelineBlock = {
     id: newId(),
     boardId,
-    title: 'Temple — Gyukdong',
+    title: 'Palace — Gyeongbokgung',
     notes: '',
     dayIndex: SEED_DAY,
     startMin: 14 * 60,
     endMin: 15 * 60 + 30,
+    place: 'Gyeongbokgung Palace, Seoul',
+    placeLabel: '',
+    placeLat: null,
+    placeLng: null,
+    placeZoom: null,
+    url: '',
     color: 'green',
   }
   const c1: CanvasBlock = {
     id: newId(),
     boardId,
     kind: 'data',
-    title: 'Gyukdong',
+    title: 'Gyeongbokgung',
     body: 'Entrance ₩3,000 · closes at 18:00',
-    url: 'https://maps.google.com',
+    url: 'https://www.google.com/maps/search/?api=1&query=Gyeongbokgung+Palace',
     x: 480,
     y: timeToY(SEED_DAY, 14 * 60) - 30,
     width: CANVAS_DEFAULT_W,
@@ -227,6 +241,12 @@ export function useItinerary() {
       dayIndex: clamp(dayIndex, 0, current.board.days - 1),
       startMin: start,
       endMin: Math.min(MIN_PER_DAY, start + 60),
+      place: '',
+      placeLabel: '',
+      placeLat: null,
+      placeLng: null,
+      placeZoom: null,
+      url: '',
       color,
     }
     patchSnapshot((s) => ({ ...s, timeline: [...s.timeline, block] }))
@@ -379,6 +399,12 @@ export function useItinerary() {
       updateTimeline(copy.id, {
         title: src.title,
         notes: src.notes,
+        place: src.place,
+        placeLabel: src.placeLabel,
+        placeLat: src.placeLat,
+        placeLng: src.placeLng,
+        placeZoom: src.placeZoom,
+        url: src.url,
         endMin: Math.min(MIN_PER_DAY, startMin + span),
       })
       return { kind: 'timeline', id: copy.id }
