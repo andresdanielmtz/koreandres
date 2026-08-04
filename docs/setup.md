@@ -1,3 +1,9 @@
+# Setting up
+
+Two optional things: Supabase, for boards that outlive one browser, and a
+Google Maps key, for the preview pane on the right. The app runs without
+either. Skip to [the map key](#setting-up-the-map) if that's what you're after.
+
 # Setting up Supabase
 
 Without this the app still runs, it just keeps everything in your browser's
@@ -63,7 +69,10 @@ it is.
 
 `timeline_blocks` are the things on the day rail. They're stored as a day
 number plus a start and end minute rather than timestamps, which keeps dragging
-them around simple.
+them around simple. Each one also carries a location: `place` is what you
+pasted, `place_label` / `place_lat` / `place_lng` / `place_zoom` are what it
+resolved to, and `url` is a link to go with it. The resolved half is saved so
+that reopening a board doesn't geocode everything on it again.
 
 `canvas_blocks` are the loose cards, data or travel, positioned with plain x/y
 coordinates and a width and height.
@@ -94,3 +103,107 @@ drop table if exists block_links, canvas_blocks, timeline_blocks, boards cascade
 
 Then run `schema.sql` again. Your browser's local copy is separate and lives
 under the `itinerary.boards.v2` key in local storage.
+
+If you set the project up before the map pane existed, you don't need to wipe
+anything. `create table if not exists` leaves an existing table alone, so the
+location columns won't appear on their own — run
+[`supabase/migrations/001-block-locations.sql`](../supabase/migrations/001-block-locations.sql)
+in the SQL editor, which adds just those. Re-running the whole of `schema.sql`
+does the same thing and is equally safe.
+
+Until you do, saving a time block fails and the toolbar says `Save failed`,
+because the app is writing columns the table hasn't got.
+
+# Setting up the map
+
+The right-hand pane is a real Google map, kept alive for the whole session.
+Selecting a block flies the camera to it rather than reloading anything, which
+is why it's the Maps JavaScript API and not an embedded iframe.
+
+## 1. Get a key
+
+In the [Google Cloud console](https://console.cloud.google.com), pick or create
+a project, then under **APIs & Services → Library**, enable two things:
+
+- **Maps JavaScript API**, which draws the map.
+- **Geocoding API**, which turns "Gyeongbokgung Palace, Seoul" into a point to
+  fly to. It also returns how big the place is, which is how the map knows to
+  stop closer for a building than for a city.
+
+Then **APIs & Services → Credentials → Create credentials → API key**.
+
+Enabling only the first is the mistake to watch for: the map draws, every
+location fails to resolve, and the pane just says it couldn't find the place.
+
+You'll be asked to attach a billing account — Google asks for one across Maps
+Platform. Both APIs have a free monthly allowance that a trip board will not
+come close to, and geocodes are cached for the session, so re-selecting a block
+you've already looked at costs nothing.
+
+## 2. Put it in `.env`
+
+```
+VITE_GOOGLE_MAPS_API_KEY=AIza...
+```
+
+The `VITE_` prefix matters here for the same reason it does for Supabase — a
+variable named `GOOGLE_MAPS_API_KEY` is silently undefined in the browser.
+Restart `npm run dev`; Vite only reads `.env` at startup.
+
+Leave it out and nothing breaks. The pane says which variable is missing, and
+every location still has an "open in Google Maps" link that needs no key.
+
+## 3. Restrict it
+
+The key ends up in the JavaScript bundle. That's unavoidable for a client-side
+map, and it's why Google expects Maps keys to be public — restricting them is
+the protection. On the key's page in Credentials:
+
+- **Application restrictions → Websites**, listing the origins you serve from
+  (`http://localhost:5173` for development, plus wherever you deploy).
+- **API restrictions → Restrict key →** Maps JavaScript API and Geocoding API.
+
+## 4. Optionally, a Map ID — and a style
+
+```
+VITE_GOOGLE_MAPS_MAP_ID=...
+VITE_GOOGLE_MAPS_MAP_ID_DARK=...
+```
+
+A Map ID does two jobs. It selects vector rendering, which is what makes the
+camera glide rather than step — raster tiles only zoom in whole levels. And it
+is the only way to restyle the map.
+
+That second part is worth being clear about, because it isn't obvious: passing
+a `styles` array in JavaScript **stops working the moment a `mapId` is set**.
+Google moved styling to the Cloud console, and the Map ID is how a map picks up
+the style attached to it. So there is no library to add and no code to write —
+the style lives in your Google account, and the app just names it.
+
+Without either variable the app uses Google's `DEMO_MAP_ID`: it works, needs no
+setup, and looks like plain Google Maps.
+
+**Making your own.** Under **Google Maps Platform → Map Management → Create Map
+ID**: map type JavaScript, rendering Vector. Do it twice if you want a styled
+dark mode, once for each. Set only `VITE_GOOGLE_MAPS_MAP_ID` and it is used for
+both themes.
+
+**Styling it.** Go to **Map Styles → Create Map Style → Import JSON**, and
+paste one of:
+
+- [`docs/map-styles/light.json`](map-styles/light.json)
+- [`docs/map-styles/dark.json`](map-styles/dark.json)
+
+They're tuned to this app: flat greys from the same palette as the interface,
+business and government pins dropped, road and transit icons off, parks and
+water left in as the two things you actually navigate by. Then associate each
+style with its Map ID, which is the last step on the style's page.
+
+The console has a visual editor on top of the imported JSON, so treat these as
+a starting point rather than something to edit by hand. Changes take a few
+minutes to reach the map, and the browser caches hard — hard-reload before
+concluding a tweak didn't work.
+
+If you set a style, drop `colorScheme` from your thinking: a styled map uses
+its style, not the light/dark switch, which is why there are two Map IDs
+rather than one.

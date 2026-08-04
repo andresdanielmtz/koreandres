@@ -15,6 +15,14 @@ separate cards off to the side, and you connect them back to the day with a
 line. Drag the blue handle out of a block and drop it on a card. Drop it on
 empty space instead and you get a new card, already connected.
 
+Down the right is a map. Copy a place out of Google Maps, paste the link into a
+block's location, and that's the whole job — it works out what the place is
+called, names the block after it if you hadn't, and remembers where it is so it
+never has to look it up twice. A plain name or a `lat,lng` works too. Clicking
+the block flies the map there, next to the hour you're doing it at. It's one live map, so it moves the way Google Maps
+does when you search: over to the place, and in or out depending on whether
+you've picked a building or a city. Nothing selected and it sits on Seoul.
+
 Pan with the scroll wheel, zoom with cmd or ctrl and scroll, right click for a
 menu. It's meant to feel like a whiteboard, not a form.
 
@@ -38,6 +46,22 @@ For boards that follow you between machines, copy `.env.example` to `.env`,
 point it at a Supabase project and run one SQL script.
 [docs/setup.md](docs/setup.md) walks through it. It takes a couple of minutes.
 
+The map pane wants one more line in that same `.env`:
+
+```
+VITE_GOOGLE_MAPS_API_KEY=your-key
+```
+
+A Google Cloud API key with two APIs enabled on it: **Maps JavaScript API** to
+draw the map, and **Geocoding API** to turn a place you've typed into somewhere
+to fly to. One thing it can't do: the short `maps.app.goo.gl` links the share
+button gives you only resolve by following their redirect, which a page with no
+server of its own isn't allowed to do. Open one and paste the full link it
+lands on, or just the name of the place. Without it the app still runs; the pane tells you which variable is
+missing and every location keeps its link out to Google Maps. Setting one up,
+and restricting it so it can't be lifted out of the bundle, is in
+[docs/setup.md](docs/setup.md#setting-up-the-map).
+
 ## Getting around
 
 | | |
@@ -50,6 +74,8 @@ point it at a Supabase project and run one SQL script.
 | Right click anything | Menu: add, recolour, duplicate, delete |
 | Drag a block's top or bottom edge | Change its start or end time |
 | Drag the blue handle | Draw a connection |
+| Click a block | Show its location on the map |
+| Drag the divider | Resize the map |
 | Enter | Rename what's selected |
 | Cmd/Ctrl + D | Duplicate |
 | Backspace | Delete |

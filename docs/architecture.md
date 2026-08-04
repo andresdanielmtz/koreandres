@@ -8,7 +8,7 @@ from reading the files in alphabetical order. This is the tour.
 ```
 src/
   lib/          pure functions and types, no React
-  state/        the three hooks that hold everything
+  state/        the hooks that hold everything
   components/   the UI
   styles.css    all of it, one file
 ```
@@ -96,6 +96,115 @@ The marquee is a plain div inside `.content`, positioned in board space, so it
 pans and zooms with everything else — only its border width is divided back out,
 to stay a hairline. Hit testing runs against the same `timelineRect` and
 `canvasRect` used to lay the blocks out, so it never reads the DOM.
+
+## The map pane
+
+The window is a toolbar over a `.stage`, and the stage is two columns: the
+board on the left, a `MapPane` on the right, a one pixel `.split` between them
+that you can drag. The pane's width is React state in `Board`, remembered in
+local storage under `itinerary.mapPane`.
+
+That's the one place the board isn't the whole window any more, and two things
+follow from it.
+
+The first is that `.viewport` can now change size without the window doing,
+which the pan clamp has to know about — so `useViewport` watches the element
+with a `ResizeObserver` rather than listening for `resize`. Everything else
+already worked, because `toBoard` was measuring the viewport's own rect instead
+of assuming it started at the top left of the screen.
+
+The second is that the map answers to the pointer as well. `Board` sets
+`data-busy` on `.app` for the length of any gesture — a block drag, a pan, a
+link, a divider drag — and the stylesheet turns off pointer events on the map
+while it's there, so a drag that wanders across the divider isn't caught by the
+wrong thing.
+
+What the pane looks at is derived, not stored. `mapView()` in `Board` reads the
+selection each render: one timeline block answers with its `place`, one canvas
+card with whatever place `placeFromUrl` can pull out of its link, and anything
+else — nothing selected, or a group — falls back to Seoul. A timeline block is
+also the only case that gets editable fields, because it's the only one with a
+`place` of its own; that's why the "Set location" menu entry focuses the pane
+instead of opening an editor on the block.
+
+## Flying the camera
+
+`useGoogleMap` builds one `google.maps.Map` and then never rebuilds it. A new
+query is a camera move, not a reload — which is the whole reason this is the
+Maps JavaScript API rather than an Embed API iframe, where every place change
+is a fresh page load inside the frame.
+
+Getting from a pasted place to a camera is `Geocoder`. What matters there isn't
+the coordinates, it's the `viewport` that comes back with them: it's wide for a
+city and tight for a building, so `zoomForBounds` turns it into a zoom level
+and the map lands at a sensible distance without anyone choosing one. That fit
+is then held back by `MAP_ZOOM_BACKOFF`, because an exact fit puts the place
+edge to edge in the pane and reads as too close — a place wants to be seen in
+its surroundings.
+
+## What a location is
+
+A timeline block stores both halves of it. `place` is exactly what was pasted —
+a Maps link, a `lat,lng`, a name — and `placeLabel` / `placeLat` / `placeLng` /
+`placeZoom` are what that turned out to mean. The second set is filled in the
+first time the block is looked at and then saved, so opening the board again
+flies straight there without asking Google anything. Editing `place` clears the
+four, which is what makes the new text get looked up instead of the old point
+being flown to.
+
+That's the reason resolution has to travel back up rather than staying in the
+hook: `useGoogleMap` is handed an `onResolved` callback, calls it once when a
+lookup succeeds, and `Board` writes the answer onto the block. The in-memory
+cache in the hook is the second line of defence, for loose canvas cards, which
+have nowhere to keep an answer and so re-resolve once per session.
+
+`labelFor` is what makes pasting a link sufficient. A Maps URL already contains
+the place's name, so nothing needs looking up to know what to call it; typed
+text is its own name; only bare coordinates have to be handed back to Google to
+be described. The block takes that name as its title if it hasn't got one, and
+`TimelineBlockView` shows `placeLabel` rather than `place` — nobody wants a
+hundred-character URL rendered on a block.
+
+The Cloud console owns how the map looks. Setting a `mapId` disables the
+`styles` array in code outright, so styling isn't a thing the app can do; it
+names a Map ID and whatever style is attached to it applies. `docs/map-styles/`
+has a light and a dark one built from the same palette as the interface.
+
+Either field can hold the location, and either can hold a Maps URL:
+`placeFromUrl` reads the long forms — `?q=`, `/maps/place/<name>`, the
+`!3d…!4d…` pin that Maps buries in its `data=` blob, a bare `@lat,lng` camera —
+and prefers the pin over the camera, since they differ.
+
+What it can't read is a short `maps.app.goo.gl` link, and that isn't a gap to
+fill later. They resolve only by following a redirect, goo.gl serves no CORS
+headers so the browser won't let the page read where it lands, and the API that
+used to expand them is gone. Doing it needs a server making the request, which
+is the one thing this app doesn't have. So `isShortMapsUrl` recognises them and
+the pane says what to paste instead — the footer link points at the short URL
+itself, since following it is how you get the long one.
+
+The flight itself is a `requestAnimationFrame` loop over `moveCamera`, easing
+centre and zoom together. `panTo` isn't enough on its own: it only animates the
+pan, and only when the target is already close. The zoom also dips on the way
+out, in proportion to how far apart the two points are, which is what stops a
+long hop reading as a smear of tiles — it's the same shape as the arc Google
+Maps flies. Fractional zoom is a vector-map feature, which is why the map is
+built with a Map ID; without one configured it falls back to `DEMO_MAP_ID`.
+
+This is the one animation in the app that moves something, and it's a
+deliberate exception to the rule below: it's the map's own idiom rather than
+the interface's, and the alternative — cutting straight there — is what the
+Embed API already did badly.
+
+A map's `colorScheme` is fixed at construction, so following the app's theme
+means replacing the map. That's what the `built` counter is for: the effect
+that flies the camera watches it, so a rebuilt map gets its place put back.
+It only happens on a deliberate theme switch, and the camera carries over.
+
+`lib/maps.ts` holds the parts with no state: reading the two env vars, loading
+the SDK once, pulling a place out of a Google Maps URL, and the mercator sum
+behind `zoomForBounds`. With no key it rejects, and the pane says which
+variable is missing instead of showing a broken map.
 
 ## Saving
 

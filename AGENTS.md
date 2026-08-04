@@ -3,7 +3,8 @@
 Koreandres is a whiteboard for planning trips. Days run down the left as one
 continuous timeline and you drop blocks onto it; loose reference cards (opening
 hours, prices, a Maps link) sit off to the side on a free canvas and connect
-back to the day with a drawn link.
+back to the day with a drawn link. A map pane down the right shows where the
+selected block is.
 
 Client-side only. React 19 + TypeScript, Vite build, Supabase for storage with a
 localStorage fallback. No UI library, no CSS framework, no server of its own.
@@ -37,7 +38,7 @@ docs/                 setup.md (Supabase), architecture.md (the long tour)
 reading before any non-trivial change. The rest of this file is the short list
 of things that are easy to break.
 
-`Board.tsx` (~660 lines) owns selection, editing, keyboard handling and all the
+`Board.tsx` (~950 lines) owns selection, editing, keyboard handling and all the
 pointer plumbing; the block views under it are mostly presentational.
 
 ## Invariants
@@ -90,6 +91,33 @@ you change one, change the other.**
 **Drag threshold.** `startDrag` in `Board.tsx` fires nothing until the pointer
 clears 3px, so a click stays a click. Keep that in any new drag interaction.
 
+**The board no longer owns the window.** `.stage` splits it with the map pane,
+so `.viewport` can resize on its own — `useViewport` watches it with a
+`ResizeObserver`, and anything measuring the window instead of the viewport's
+rect is a bug. Every gesture sets `data-busy` on `.app`, which turns off
+pointer events on the map so a drag crossing the divider isn't answered by it;
+a new drag has to do the same.
+
+**The map is one map.** `useGoogleMap` builds a `google.maps.Map` once and
+moves its camera; selecting a block must never rebuild or reload it — that was
+the whole point of dropping the Embed API. The flight is a rAF loop over
+`moveCamera` and is the one animation in the app allowed to move something.
+`colorScheme` and `mapId` are fixed at construction, so a theme switch *does*
+replace the map and bumps `built`, which is what re-runs the flight. What the
+pane shows is derived from `selection` by `mapView()`. `lib/maps.ts` reads
+`VITE_GOOGLE_MAPS_API_KEY` (needs Maps JavaScript API **and** Geocoding API)
+and the two `VITE_GOOGLE_MAPS_MAP_ID*` vars; running with no key is a supported
+state, so don't make the pane assume one. The map's appearance lives in the
+Cloud console, not here — a `styles` array is ignored once `mapId` is set.
+
+**A location is two halves.** `place` is what the user pasted; `placeLabel` /
+`placeLat` / `placeLng` / `placeZoom` are what it resolved to, and they are
+persisted so a board doesn't re-geocode on every open. Editing `place` **must**
+clear the other four, or the map flies to the old point. Resolution happens in
+`useGoogleMap` and comes back through `onResolved` for `Board` to store — the
+hook never writes. Show `placeLabel` in the UI, never `place`, which is often a
+raw URL.
+
 ## The feel
 
 The brief is that it should feel *clicky*, and it's mostly restraint:
@@ -97,7 +125,8 @@ The brief is that it should feel *clicky*, and it's mostly restraint:
 - Transitions are capped at 80ms (`--dur` at the top of `styles.css`) and apply
   only to colour, shadow and opacity.
 - **Nothing affecting position or size is ever animated.** A block easing into
-  place after a drag reads as lag.
+  place after a drag reads as lag. The map camera is the one exception, and it
+  is the map's idiom rather than the interface's.
 - Flat throughout. Depth comes from 1px borders. Soft drop shadows are reserved
   for things that genuinely float (menus, tooltips); every other `box-shadow` is
   a hard selection ring.
