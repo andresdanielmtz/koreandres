@@ -152,6 +152,39 @@ Types are in `lib/types.ts` and are the shared vocabulary; prefer widening those
 over local structural types. `Ref` (`{ kind, id }`) is how any block is pointed
 at across the app.
 
+## Commits
+
+`type: what changed` on one line, lower case. No body, no bullets, **no
+`Co-Authored-By` or generated-with trailer** — this repo has one author and
+commits are attributed to them alone.
+
+```
+feat: multiple selections
+add: google maps loader and maps url parsing
+fix: dark mode selects the style's dark variant
+refactor: pan clamp watches the viewport element
+remove: legacy embed api fallback
+docs: map id is not a style id
+```
+
+Split by intent, not by file. One reason per commit, and each commit builds on
+its own so the history bisects. If one file would have to straddle two commits,
+resequence the work rather than splitting the file.
+
+## Documentation
+
+`docs/` is read by agents at least as often as by people. Write for someone who
+needs one answer, not a tour: answer first, reasoning after, and only the
+reasoning that isn't already plain in the code. A table or a numbered list beats
+a paragraph whenever the content is steps or facts.
+
+State failure modes — they're the highest-value sentences in the file. "A style
+ID here renders the default map" saves an hour; more prose about what a Map ID
+is saves nothing. When a doc drifts from the code, fix the doc in the same
+commit.
+
+Keep it short. If a section has stopped earning its length, cut it.
+
 ## Environment and data
 
 `.env` is gitignored and must stay that way. Only `VITE_`-prefixed variables
