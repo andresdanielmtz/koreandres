@@ -76,6 +76,8 @@ export function useGoogleMap(
   const geocoderRef = useRef<google.maps.Geocoder | null>(null)
   const cache = useRef(new Map<string, ResolvedPlace | null>())
   const frame = useRef(0)
+  /** Whether we ended up on raster tiles after asking for vector. */
+  const raster = useRef(false)
 
   /* Read after an await, where the render that started it is long gone. */
   const resolvedRef = useRef(place.onResolved)
@@ -181,10 +183,15 @@ export function useGoogleMap(
 
     // Distance, measured in screens at the wider of the two zooms.
     const span = 360 / 2 ** Math.min(from.zoom, to.zoom)
-    const dip = Math.min(
-      MAP_FLIGHT_DIP_MAX,
-      MAP_FLIGHT_DIP * Math.log2(1 + Math.hypot(dLat, dLng) / span),
-    )
+    // On raster tiles the dip is what makes a hop look like a reload: it costs
+    // up to two extra levels out and two back, and every level crossed is a
+    // fresh set of tiles. Without it the flight crosses the fewest it can.
+    const dip = raster.current
+      ? 0
+      : Math.min(
+          MAP_FLIGHT_DIP_MAX,
+          MAP_FLIGHT_DIP * Math.log2(1 + Math.hypot(dLat, dLng) / span),
+        )
 
     const start = performance.now()
     const step = (now: number) => {
@@ -246,9 +253,17 @@ export function useGoogleMap(
 
         el.replaceChildren()
         markerRef.current = null
-        mapRef.current = new google.maps.Map(el, {
+        const map = new google.maps.Map(el, {
           ...from,
           mapId: mapIdFor(theme),
+          // Vector tiles are drawn once and reprojected, so a zoom moves what
+          // is already on screen. Raster answers the same zoom by fetching a
+          // whole new set of tiles at the new level, which is the flicker.
+          renderingType: google.maps.RenderingType.VECTOR,
+          // Default on a vector map, off on a raster one — where it is the
+          // difference between tiles that scale as the camera moves and tiles
+          // that are thrown away and refetched at every whole level.
+          isFractionalZoomEnabled: true,
           // Left off only when a dark Map ID says the styles handle it.
           ...(usesColorScheme
             ? {
@@ -265,7 +280,18 @@ export function useGoogleMap(
           // map a plain scroll should zoom, without asking for a modifier.
           gestureHandling: 'greedy',
         })
+        mapRef.current = map
         geocoderRef.current ??= new google.maps.Geocoder()
+
+        // Asking for vector is not getting it: the Map ID's cloud
+        // configuration overrides the request, and a device without WebGL is
+        // refused outright. It also settles a moment after construction, so
+        // the answer is read again when it changes.
+        const readRendering = () => {
+          raster.current = map.getRenderingType() === google.maps.RenderingType.RASTER
+        }
+        readRendering()
+        map.addListener('renderingtype_changed', readRendering)
 
         setStatus('ready')
         setBuilt((n) => n + 1)

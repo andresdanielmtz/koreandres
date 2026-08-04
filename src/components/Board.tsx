@@ -557,14 +557,17 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
    * Step the view to the previous / next day. The current day is read back out
    * of the transform rather than tracked, so it stays honest after a free pan —
    * and stepping up from mid-day lands on the top of the day you are already on.
+   *
+   * The step is read from where a slide already underway is going to land, not
+   * from the frame it is on, so holding the arrow down walks a day at a time.
    */
   function goToDay(step: -1 | 1) {
-    const v = viewport.getView()
+    const v = viewport.getTarget()
     const anchored = (DAY_ANCHOR_Y - v.y) / v.scale
     const raw = anchored / DAY_STRIDE
     const current = Math.floor(raw)
     const next = step > 0 ? current + 1 : raw - current > 0.01 ? current : current - 1
-    viewport.panBy(0, (anchored - dayTop(clamp(next, 0, board.days - 1))) * v.scale)
+    viewport.glideBy(0, (anchored - dayTop(clamp(next, 0, board.days - 1))) * v.scale)
   }
 
   /* -------------------------------------------------------------- preview -- */

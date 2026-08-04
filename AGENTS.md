@@ -51,7 +51,9 @@ state exists for the toolbar's "100%" readout and nothing else. Never drive the
 transform from React state. Convert with `viewport.toBoard(clientX, clientY)`.
 Pans and zooms are clamped to `boardBounds()` — the occupied box plus
 `PAN_MARGIN` — so anything that changes where content sits has to be reflected
-there or you'll be able to pan into a void again.
+there or you'll be able to pan into a void again. `glideBy` is the one move
+that eases rather than cuts (the day arrows); every gesture calls `stopGlide`
+first, so nothing new may move the view without cancelling one.
 
 **Days are numbers, not dates.** A `TimelineBlock` stores `dayIndex` plus
 `startMin`/`endMin` (minutes from midnight, 0–1440). The board's `startDate`
@@ -100,7 +102,11 @@ a new drag has to do the same.
 
 **The map is one map.** `useGoogleMap` builds a `google.maps.Map` once and
 moves its camera; selecting a block must never rebuild or reload it — that was
-the whole point of dropping the Embed API. The flight is a rAF loop over
+the whole point of dropping the Embed API. It asks for
+`renderingType: VECTOR`, because raster answers a zoom by fetching a whole new
+set of tiles at the new level, which reads as the map reloading under you. The
+Map ID's cloud configuration overrides that request, so the actual type is read
+back with `getRenderingType()`; on raster the flight drops its zoom dip. The flight is a rAF loop over
 `moveCamera` and is the one animation in the app allowed to move something.
 `colorScheme` and `mapId` are fixed at construction, so a theme switch *does*
 replace the map and bumps `built`, which is what re-runs the flight. What the
@@ -125,8 +131,10 @@ The brief is that it should feel *clicky*, and it's mostly restraint:
 - Transitions are capped at 80ms (`--dur` at the top of `styles.css`) and apply
   only to colour, shadow and opacity.
 - **Nothing affecting position or size is ever animated.** A block easing into
-  place after a drag reads as lag. The map camera is the one exception, and it
-  is the map's idiom rather than the interface's.
+  place after a drag reads as lag. The two cameras are the exceptions — the
+  map's flight, and the board's own view when the day arrows move it for you
+  (`glideBy`, `VIEW_GLIDE_MS`). Both answer a press rather than a drag, where a
+  cut loses which way you went. Nothing the pointer is holding ever eases.
 - Flat throughout. Depth comes from 1px borders. Soft drop shadows are reserved
   for things that genuinely float (menus, tooltips); every other `box-shadow` is
   a hard selection ring.

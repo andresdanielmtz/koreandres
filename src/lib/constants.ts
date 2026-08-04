@@ -43,6 +43,11 @@ export const CANVAS_DEFAULT_H = 132
 export const MIN_ZOOM = 0.25
 export const MAX_ZOOM = 2.5
 
+/** How long the view takes to slide when something moves it for you — the day
+ *  arrows. Long enough to show which way you went, short enough that pressing
+ *  it twice never queues up a ride. */
+export const VIEW_GLIDE_MS = 170
+
 /* ------------------------------------------------------------------- map -- */
 
 /** Where the preview looks when nothing with a location is selected. */

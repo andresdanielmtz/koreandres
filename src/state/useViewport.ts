@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { MAX_ZOOM, MIN_ZOOM } from '../lib/constants'
+import { MAX_ZOOM, MIN_ZOOM, VIEW_GLIDE_MS } from '../lib/constants'
 import { clamp } from '../lib/time'
 import type { Bounds, Point } from '../lib/types'
 
@@ -8,6 +8,11 @@ export type { Point }
 
 /** Opens on 08:00 of day one rather than at midnight. */
 const INITIAL: View = { x: 320, y: -392, scale: 1 }
+
+/** Decelerating: leaves at the speed of the press and arrives settled. */
+const easeGlide = (t: number) => 1 - (1 - t) ** 3
+
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
  * One axis of the pan clamp. `lo`/`hi` are the offsets at which the content's
@@ -39,6 +44,10 @@ export function useViewport(
   const spaceRef = useRef(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
   const syncing = useRef(0)
+  const glide = useRef(0)
+  /** Where a running glide is headed, so a second press steps on from there
+   *  rather than from wherever the slide happens to have reached. */
+  const glideTo = useRef<View | null>(null)
 
   function paint() {
     const el = contentRef.current
@@ -98,6 +107,7 @@ export function useViewport(
       window.removeEventListener('pointerup', up, true)
       window.removeEventListener('pointercancel', up, true)
       observer.disconnect()
+      stopGlide()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -121,7 +131,16 @@ export function useViewport(
     }
   }
 
+  /** Ends a glide wherever it has got to. Every gesture below calls this, so
+   *  an animation can never fight the pointer for the transform. */
+  function stopGlide() {
+    cancelAnimationFrame(glide.current)
+    glide.current = 0
+    glideTo.current = null
+  }
+
   function zoomAt(clientX: number, clientY: number, factor: number) {
+    stopGlide()
     const rect = viewportRef.current?.getBoundingClientRect()
     const v = viewRef.current
     const px = clientX - (rect?.left ?? 0)
@@ -139,12 +158,49 @@ export function useViewport(
   }
 
   function panBy(dx: number, dy: number) {
+    stopGlide()
     const v = viewRef.current
     apply({ ...v, x: v.x + dx, y: v.y + dy })
   }
 
+  /**
+   * Pan by an offset over `VIEW_GLIDE_MS` instead of cutting to it. Used by the
+   * day arrows, where a jump the height of a whole day leaves you unsure
+   * whether you moved one day or three. This moves the camera, not the blocks —
+   * nothing on the board is ever eased into place.
+   */
+  function glideBy(dx: number, dy: number) {
+    // The offset is measured from where a glide already running is headed, so
+    // two presses in a row cover two days rather than one and a bit.
+    const base = glideTo.current ?? viewRef.current
+    const to = contain({ ...base, x: base.x + dx, y: base.y + dy })
+    stopGlide()
+
+    const from = viewRef.current
+    if (reducedMotion()) {
+      apply(to)
+      return
+    }
+    glideTo.current = to
+
+    const start = performance.now()
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / VIEW_GLIDE_MS)
+      const k = easeGlide(t)
+      apply({
+        scale: from.scale,
+        x: from.x + (to.x - from.x) * k,
+        y: from.y + (to.y - from.y) * k,
+      })
+      if (t < 1) glide.current = requestAnimationFrame(step)
+      else stopGlide()
+    }
+    glide.current = requestAnimationFrame(step)
+  }
+
   /** Centres a board-space point in the viewport, keeping the current zoom. */
   function centerOn(x: number, y: number) {
+    stopGlide()
     const rect = viewportRef.current?.getBoundingClientRect()
     if (!rect) return
     const v = viewRef.current
@@ -153,11 +209,13 @@ export function useViewport(
 
   /** Parks a board-space point at a fixed offset from the viewport's corner. */
   function focus(x: number, y: number, offsetX = INITIAL.x, offsetY = 88) {
+    stopGlide()
     const v = viewRef.current
     apply({ x: offsetX - x * v.scale, y: offsetY - y * v.scale, scale: v.scale })
   }
 
   function reset() {
+    stopGlide()
     apply(INITIAL)
   }
 
@@ -216,6 +274,7 @@ export function useViewport(
 
   /** Attach to a pointerdown that should start a pan. */
   function beginPan(e: React.PointerEvent) {
+    stopGlide()
     const target = e.currentTarget as HTMLElement
     target.setPointerCapture(e.pointerId)
     setPanning(true)
@@ -243,10 +302,13 @@ export function useViewport(
     panning,
     spaceHeld,
     getView: () => viewRef.current,
+    /** The view a glide is heading for, or the current one when none is. */
+    getTarget: () => glideTo.current ?? viewRef.current,
     toBoard,
     toClient,
     zoomBy,
     panBy,
+    glideBy,
     centerOn,
     focus,
     reset,

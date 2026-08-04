@@ -198,13 +198,19 @@ why. Edit them in the console's visual editor rather than by hand; changes take
 minutes to propagate and browsers cache them hard, so hard-reload before
 deciding a tweak didn't land.
 
-### Two ways this goes wrong
+### Three ways this goes wrong
 
 **A Style ID in `VITE_GOOGLE_MAPS_MAP_ID`.** Map IDs and styles are different
 objects with different IDs, and only the Map ID works here. A style's ID
 resolves to nothing: default map, no error in the interface, and — since the
 fallback is raster — a camera that steps between zoom levels instead of
 gliding. That last symptom is the fastest way to spot it.
+
+**A Map ID created with rendering Raster.** The style lands, but every zoom
+refetches a whole set of tiles, so the map appears to reload each time it moves.
+The app asks for `renderingType: VECTOR`, and the Map ID's configuration
+overrides it — there is no fix in the code. Change the rendering type on the Map
+ID, or make a new one; the setting is on the Map ID, not on the style.
 
 **A dark theme that looks neither styled nor dark.** Light and dark are two
 *variants of one style*, so there is no separate dark style ID; one Map ID

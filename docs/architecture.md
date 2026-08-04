@@ -45,6 +45,13 @@ than the viewport on an axis gets centred on it instead of pinned to one edge.
 The bounds are recomputed each render and re-clamped in a layout effect, which
 is what pulls the view back in when a day is removed under it.
 
+One move eases rather than cuts: `glideBy`, a `requestAnimationFrame` loop over
+the same clamp, which the day arrows use. Every other entry point — wheel, drag,
+zoom, reset — calls `stopGlide` first, so a slide can never fight the pointer,
+and `getTarget()` reports where a running one is headed so pressing the arrow
+twice covers two days instead of one and a bit. `prefers-reduced-motion` skips
+straight to the destination.
+
 ## Days as numbers, not dates
 
 A timeline block stores a day number and two minute counts, not timestamps.
@@ -188,10 +195,26 @@ centre and zoom together. `panTo` isn't enough on its own: it only animates the
 pan, and only when the target is already close. The zoom also dips on the way
 out, in proportion to how far apart the two points are, which is what stops a
 long hop reading as a smear of tiles — it's the same shape as the arc Google
-Maps flies. Fractional zoom is a vector-map feature, which is why the map is
-built with a Map ID; without one configured it falls back to `DEMO_MAP_ID`.
+Maps flies.
 
-This is the one animation in the app that moves something, and it's a
+All of that rests on the map being a **vector** one. A raster map redraws by
+fetching a new set of tiles at every whole zoom level it crosses, so a flight —
+or a plain scroll to zoom — looks like the map reloading rather than moving.
+Vector tiles are drawn once and reprojected, and only they zoom by fractions.
+The map therefore asks for it outright with `renderingType: VECTOR`, alongside
+`isFractionalZoomEnabled`.
+
+Asking is not getting. The Map ID's configuration in the Cloud console has the
+final say, and a device without WebGL is refused, so the type that came back is
+read with `getRenderingType()` and again on `renderingtype_changed`. On a raster
+map the flight drops its zoom dip, which would otherwise cost up to two levels
+out and two back — four tile sets — for nothing but the arc.
+
+**If the map flickers on every zoom, the Map ID is a raster one.** Set it to
+vector in the Cloud console; nothing in the code can override that. Without any
+Map ID configured the pane falls back to `DEMO_MAP_ID`, which is vector.
+
+The flight is one of two animations in the app that move something, and a
 deliberate exception to the rule below: it's the map's own idiom rather than
 the interface's, and the alternative — cutting straight there — is what the
 Embed API already did badly.
@@ -231,6 +254,12 @@ Transitions are capped at 80ms, in the `--dur` variable at the top of
 `styles.css`, and they only ever apply to colour, shadow and opacity. Nothing
 that affects position or size is ever animated. If a block eased into place
 after you dragged it, it would feel like it was lagging behind your hand.
+
+The exceptions are both cameras, and neither is holding your pointer: the map's
+flight, and the day arrows, which slide the view over `VIEW_GLIDE_MS` (170ms)
+instead of cutting. A cut the height of a whole day gives you no direction to
+read, so it lands as a jump cut rather than a move; long enough to see and short
+enough that holding the arrow down never becomes a ride.
 
 Drags don't start until the pointer has moved 3px, so a click still reads as a
 click and doesn't nudge anything.
