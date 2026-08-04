@@ -15,6 +15,7 @@ import {
   MIN_PER_DAY,
   PX_PER_MIN,
 } from '../lib/constants'
+import { commuteEnds, commuteTitle, routable, type CommuteEnds } from '../lib/commute'
 import {
   boardBounds,
   canvasRect,
@@ -23,10 +24,10 @@ import {
   rectsOverlap,
   timelineRect,
 } from '../lib/geometry'
-import { placeFromUrl } from '../lib/maps'
+import { mapsDirectionsUrl, placeFromUrl } from '../lib/maps'
 import { clamp, dayTop, formatDayLabel, formatTime, snap, timeToY, yToTime } from '../lib/time'
 import { refEq } from '../lib/types'
-import type { CanvasBlock, ColorName, Ref, Rect, Snapshot } from '../lib/types'
+import type { CanvasBlock, ColorName, Ref, Rect, Snapshot, TravelMode } from '../lib/types'
 import type { Itinerary } from '../state/useItinerary'
 import { useTheme } from '../state/useTheme'
 import { useViewport } from '../state/useViewport'
@@ -93,6 +94,14 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
   const [mapFocus, setMapFocus] = useState<{ field: MapField } | null>(null)
 
   const lanes = packLanes(timeline)
+
+  /** Both ends of every commute block, worked out once per render: the block
+   *  views need the name, the map pane needs the route, and the answer depends
+   *  on the whole rail rather than on the block. */
+  const ends = new Map<string, CommuteEnds>()
+  for (const b of timeline) {
+    if (b.kind === 'commute') ends.set(b.id, commuteEnds(b, timeline))
+  }
 
   const rectFor = (ref: Ref): Rect | null => {
     if (ref.kind === 'timeline') {
@@ -354,12 +363,16 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
 
   function blockEntries(ref: Ref): MenuEntry[] {
     const canvasBlock = ref.kind === 'canvas' ? canvas.find((b) => b.id === ref.id) : null
+    const timelineBlock = ref.kind === 'timeline' ? timeline.find((b) => b.id === ref.id) : null
+    const commute = timelineBlock?.kind === 'commute'
     return [
       {
         kind: 'label',
         text:
           ref.kind === 'timeline'
-            ? 'Time block'
+            ? commute
+              ? 'Commute block'
+              : 'Time block'
             : canvasBlock?.kind === 'travel'
               ? 'Travel block'
               : 'Data block',
@@ -375,18 +388,19 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
       },
       // A time block keeps its location and link in the map pane rather than on
       // the block, so these open the pane's fields instead of an inline editor.
+      // A commute keeps its two ends in the same two slots.
       ...(ref.kind === 'timeline'
         ? [
             {
               kind: 'item' as const,
-              label: 'Set location',
-              icon: <IconPin size={13} />,
+              label: commute ? 'Set start' : 'Set location',
+              icon: commute ? <IconRoute size={13} /> : <IconPin size={13} />,
               onSelect: () => setMapFocus({ field: 'place' }),
             },
             {
               kind: 'item' as const,
-              label: 'Edit link URL',
-              icon: <IconLink size={13} />,
+              label: commute ? 'Set destination' : 'Edit link URL',
+              icon: commute ? <IconPin size={13} /> : <IconLink size={13} />,
               onSelect: () => setMapFocus({ field: 'url' }),
             },
           ]
@@ -502,6 +516,19 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
             }
           },
         },
+        {
+          kind: 'item',
+          label: 'Add commute',
+          hint: onRail ? formatTime(snap(minute)) : undefined,
+          icon: <IconRoute size={13} />,
+          // Dropped straight in and left alone: it reads the blocks either
+          // side of where it landed, so it usually knows the trip already.
+          // No rename either — a typed title would only hide that.
+          onSelect: () => {
+            const created = itinerary.addTimelineBlock(dayIndex, minute, 'slate', 'commute')
+            if (created) setSelection([{ kind: 'timeline', id: created.id }])
+          },
+        },
         { kind: 'separator' },
         {
           kind: 'item',
@@ -582,6 +609,47 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     const only = selection.length === 1 ? selection[0] : null
 
     const block = only?.kind === 'timeline' ? timeline.find((b) => b.id === only.id) : null
+
+    if (block?.kind === 'commute') {
+      const pair = ends.get(block.id) ?? commuteEnds(block, timeline)
+      const named = commuteTitle(pair)
+      const canRoute = routable(pair)
+      return {
+        id: `timeline:${block.id}`,
+        title: block.title || named || 'Commute',
+        meta: `${formatDayLabel(board.startDate, block.dayIndex)} · ${formatTime(block.startMin)} – ${formatTime(block.endMin)}`,
+        // A commute has no place of its own — the route below is the whole
+        // subject, and these are the fields the point map would have used.
+        query: '',
+        lat: null,
+        lng: null,
+        zoom: null,
+        label: named,
+        place: '',
+        url: '',
+        onPlace: null,
+        onUrl: null,
+        onResolved: null,
+        commute: {
+          // The typed value, and what the block worked out for itself. An end
+          // that was inferred stays empty here so it keeps following the rail.
+          from: { value: block.fromPlace, hint: pair.from.label },
+          to: { value: block.toPlace, hint: pair.to.label },
+          mode: block.travelMode,
+          openUrl: canRoute
+            ? mapsDirectionsUrl(pair.from.query, pair.to.query, block.travelMode)
+            : '',
+          onFrom: (fromPlace: string) => itinerary.updateTimeline(block.id, { fromPlace }),
+          onTo: (toPlace: string) => itinerary.updateTimeline(block.id, { toPlace }),
+          onMode: (travelMode: TravelMode) =>
+            itinerary.updateTimeline(block.id, { travelMode }),
+        },
+        route: canRoute
+          ? { from: pair.from.query, to: pair.to.query, mode: block.travelMode }
+          : null,
+      }
+    }
+
     if (block) {
       return {
         id: `timeline:${block.id}`,
@@ -618,6 +686,8 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
             // yourself is left alone.
             ...(block.title.trim() ? {} : { title: found.label }),
           }),
+        commute: null,
+        route: null,
       }
     }
 
@@ -640,6 +710,8 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         // A loose card has nowhere to keep the answer, so it looks up each
         // time — the cache in the hook means that costs one request a session.
         onResolved: null,
+        commute: null,
+        route: null,
       }
     }
 
@@ -660,6 +732,8 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
       onPlace: null,
       onUrl: null,
       onResolved: null,
+      commute: null,
+      route: null,
     }
   }
 
@@ -954,6 +1028,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
                   key={block.id}
                   block={block}
                   rect={timelineRect(block, lanes.get(block.id))}
+                  route={commuteTitle(ends.get(block.id))}
                   selected={isSelected(ref)}
                   editing={editFieldFor(ref) === 'title'}
                   targeted={isTargeted(ref)}

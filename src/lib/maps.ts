@@ -3,13 +3,16 @@
  * and flies its camera between places, so selecting a block moves the map
  * rather than reloading it.
  *
- * The key needs two APIs enabled on its Google Cloud project: *Maps
- * JavaScript API* to draw the map, and *Geocoding API* to turn a typed place
- * into coordinates. See docs/setup.md.
+ * The key needs three APIs enabled on its Google Cloud project: *Maps
+ * JavaScript API* to draw the map, *Geocoding API* to turn a typed place into
+ * coordinates, and *Directions API* for the route a commute block draws. See
+ * docs/setup.md.
  *
  * Only VITE_-prefixed variables reach the browser, so a key named
  * GOOGLE_MAPS_API_KEY would silently read as undefined.
  */
+import type { TravelMode } from './types'
+
 const key = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim()
 
 export const MAPS_KEY = key ?? ''
@@ -195,6 +198,11 @@ export function zoomForBounds(
 export const mapsSearchUrl = (query: string) =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
 
+/** The same route, opened in Maps proper — where you can actually leave. */
+export const mapsDirectionsUrl = (from: string, to: string, mode: TravelMode) =>
+  `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}` +
+  `&destination=${encodeURIComponent(to)}&travelmode=${mode}`
+
 /* ---------------------------------------------------------------- loader -- */
 
 const CALLBACK = '__koreandresMapsReady'
@@ -215,9 +223,9 @@ export function loadMaps(): Promise<void> {
     const params = new URLSearchParams({
       key: MAPS_KEY,
       v: 'weekly',
-      // `marker` is the only library worth naming — AdvancedMarkerElement lives
-      // there, while Geocoder comes with the core namespace.
-      libraries: 'marker',
+      // AdvancedMarkerElement lives in `marker` and the directions classes in
+      // `routes`; Geocoder comes with the core namespace.
+      libraries: 'marker,routes',
       loading: 'async',
       callback: CALLBACK,
     })

@@ -55,6 +55,17 @@ there or you'll be able to pan into a void again. `glideBy` is the one move
 that eases rather than cuts (the day arrows); every gesture calls `stopGlide`
 first, so nothing new may move the view without cancelling one.
 
+**A commute block is a timeline block with a route.** `TimelineBlock.kind` is
+`'event'` or `'commute'`; a commute uses `fromPlace` / `toPlace` /
+`travelMode` and leaves `place` and its four resolved halves empty. **Either
+end left empty is the normal case, not a missing value** — `lib/commute.ts`
+reads it off the rail instead: the nearest located event before and after,
+within `COMMUTE_GAP_MAX` (2 hours) of the block's own edges, measured in
+absolute minutes so a gap can cross midnight. Anything that changes when a
+block sits, or where, changes what the commutes around it are joining, so the
+ends are recomputed every render rather than stored. Nothing in that file
+touches Google; it answers with text, and `useGoogleMap` turns it into a route.
+
 **Days are numbers, not dates.** A `TimelineBlock` stores `dayIndex` plus
 `startMin`/`endMin` (minutes from midnight, 0–1440). The board's `startDate`
 turns that into a real date only when a header is rendered. Keep it that way —
@@ -110,9 +121,13 @@ back with `getRenderingType()`; on raster the flight drops its zoom dip. The fli
 `moveCamera` and is the one animation in the app allowed to move something.
 `colorScheme` and `mapId` are fixed at construction, so a theme switch *does*
 replace the map and bumps `built`, which is what re-runs the flight. What the
-pane shows is derived from `selection` by `mapView()`. `lib/maps.ts` reads
-`VITE_GOOGLE_MAPS_API_KEY` (needs Maps JavaScript API **and** Geocoding API)
-and the two `VITE_GOOGLE_MAPS_MAP_ID*` vars; running with no key is a supported
+pane shows is derived from `selection` by `mapView()`. A commute block draws a
+`DirectionsRenderer` polyline instead of a marker, and the camera is still
+flown — to the route's bounds — rather than let the renderer cut to them
+(`preserveViewport: true`, and don't remove it). Routes are cached per session
+on both ends plus the mode, and a failure is cached as its reason.
+`lib/maps.ts` reads `VITE_GOOGLE_MAPS_API_KEY` (needs Maps JavaScript API,
+Geocoding API **and** Directions API) and the two `VITE_GOOGLE_MAPS_MAP_ID*` vars; running with no key is a supported
 state, so don't make the pane assume one. The map's appearance lives in the
 Cloud console, not here — a `styles` array is ignored once `mapId` is set.
 
@@ -122,7 +137,8 @@ persisted so a board doesn't re-geocode on every open. Editing `place` **must**
 clear the other four, or the map flies to the old point. Resolution happens in
 `useGoogleMap` and comes back through `onResolved` for `Board` to store — the
 hook never writes. Show `placeLabel` in the UI, never `place`, which is often a
-raw URL.
+raw URL. A commute's two ends have no such second half — they are handed to the
+router as text, and it does its own lookup.
 
 ## The feel
 

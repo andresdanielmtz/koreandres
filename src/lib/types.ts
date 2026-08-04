@@ -1,6 +1,13 @@
 export type BlockKind = 'timeline' | 'canvas'
 export type CanvasKind = 'data' | 'travel'
 
+/** What a block on the rail is. An event happens somewhere; a commute is the
+ *  getting between two of them, and carries a route instead of a place. */
+export type TimelineKind = 'event' | 'commute'
+
+/** The four Google understands. Stored as written; upper-cased at the call. */
+export type TravelMode = 'transit' | 'walking' | 'driving' | 'bicycling'
+
 export type ColorName =
   | 'blue'
   | 'green'
@@ -22,6 +29,7 @@ export type Board = {
 export type TimelineBlock = {
   id: string
   boardId: string
+  kind: TimelineKind
   title: string
   notes: string
   dayIndex: number
@@ -41,6 +49,12 @@ export type TimelineBlock = {
   placeZoom: number | null
   url: string
   color: ColorName
+  /* --- commute only. An event block leaves all three at their defaults. --- */
+  /** Where the trip starts and ends, as pasted. Either one left empty means
+   *  "work it out from the blocks either side of me" — see `lib/commute.ts`. */
+  fromPlace: string
+  toPlace: string
+  travelMode: TravelMode
 }
 
 export type CanvasBlock = {

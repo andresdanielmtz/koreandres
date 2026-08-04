@@ -1,9 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
+import { TRAVEL_MODE_LABEL, TRAVEL_MODES } from '../lib/constants'
 import { isShortMapsUrl, MAPS_KEY_VAR, mapsSearchUrl } from '../lib/maps'
-import { useGoogleMap, type ResolvedPlace } from '../state/useGoogleMap'
-import { IconExternal, IconPin } from './icons'
+import type { TravelMode } from '../lib/types'
+import { useGoogleMap, type MapRoute, type ResolvedPlace } from '../state/useGoogleMap'
+import { IconExternal, IconPin, IconRoute } from './icons'
 
+/** Which field the context menu asked to focus. On a commute block the two
+ *  are the ends of the trip rather than a location and a link. */
 export type MapField = 'place' | 'url'
+
+/** The pane's commute half: two ends to edit, and how you're getting there. */
+export type CommuteView = {
+  /** `value` is what was typed, `hint` what the block worked out on its own —
+   *  shown as the placeholder, so an inferred end still reads as an end. */
+  from: { value: string; hint: string }
+  to: { value: string; hint: string }
+  mode: TravelMode
+  /** Where to open the same trip in Maps proper. Empty when an end is unknown. */
+  openUrl: string
+  onFrom: (value: string) => void
+  onTo: (value: string) => void
+  onMode: (mode: TravelMode) => void
+}
 
 /** What the pane is looking at. Derived from the selection by `Board`. */
 export type MapView = {
@@ -26,6 +44,10 @@ export type MapView = {
   onPlace: ((value: string) => void) | null
   onUrl: ((value: string) => void) | null
   onResolved: ((place: ResolvedPlace) => void) | null
+  /** Set only for a commute block, and it replaces the fields above. */
+  commute: CommuteView | null
+  /** The trip to draw. Null while either end is still unknown. */
+  route: MapRoute | null
 }
 
 type Props = {
@@ -38,7 +60,7 @@ type Props = {
 
 export function MapPane({ view, width, theme, focus }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
-  const { status, missing } = useGoogleMap(
+  const { status, missing, route, routeError } = useGoogleMap(
     canvasRef,
     {
       key: view.id,
@@ -47,6 +69,7 @@ export function MapPane({ view, width, theme, focus }: Props) {
       lng: view.lng,
       zoom: view.zoom,
       onResolved: view.onResolved,
+      route: view.route,
     },
     theme,
   )
@@ -71,23 +94,67 @@ export function MapPane({ view, width, theme, focus }: Props) {
         {view.meta && <div className="map-meta">{view.meta}</div>}
       </div>
 
-      {view.onPlace && view.onUrl && (
+      {view.commute ? (
         <div className="map-fields" key={view.id}>
+          {/* An empty end is not a blank: the placeholder is the block it
+              worked out for itself, and typing is how you overrule it. */}
           <Field
-            label="Location"
+            label="From"
             inputRef={placeRef}
-            value={view.place}
-            placeholder="Paste a Google Maps link"
-            onCommit={view.onPlace}
+            value={view.commute.from.value}
+            placeholder={view.commute.from.hint || 'Nothing before this'}
+            onCommit={view.commute.onFrom}
           />
           <Field
-            label="Link"
+            label="To"
             inputRef={urlRef}
-            value={view.url}
-            placeholder="https://…"
-            onCommit={view.onUrl}
+            value={view.commute.to.value}
+            placeholder={view.commute.to.hint || 'Nothing after this'}
+            onCommit={view.commute.onTo}
           />
+
+          <div className="segmented map-modes" role="group" aria-label="How you're travelling">
+            {TRAVEL_MODES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                data-active={mode === view.commute?.mode ? '' : undefined}
+                onClick={() => view.commute?.onMode(mode)}
+              >
+                {TRAVEL_MODE_LABEL[mode]}
+              </button>
+            ))}
+          </div>
+
+          {route && (
+            <div className="map-route">
+              <IconRoute size={11} />
+              <strong>{route.duration}</strong>
+              {route.distance && <span>{route.distance}</span>}
+              {route.via && <span className="map-via">{route.via}</span>}
+            </div>
+          )}
         </div>
+      ) : (
+        view.onPlace &&
+        view.onUrl && (
+          <div className="map-fields" key={view.id}>
+            <Field
+              label="Location"
+              inputRef={placeRef}
+              value={view.place}
+              placeholder="Paste a Google Maps link"
+              onCommit={view.onPlace}
+            />
+            <Field
+              label="Link"
+              inputRef={urlRef}
+              value={view.url}
+              placeholder="https://…"
+              onCommit={view.onUrl}
+            />
+          </div>
+        )
       )}
 
       <div className="map-frame">
@@ -102,8 +169,9 @@ export function MapPane({ view, width, theme, focus }: Props) {
               <code>.env</code> and restart the dev server.
             </p>
             <p>
-              It wants a Google Cloud API key with the <strong>Maps JavaScript API</strong>{' '}
-              and the <strong>Geocoding API</strong> enabled. Only <code>VITE_</code>-prefixed
+              It wants a Google Cloud API key with the <strong>Maps JavaScript API</strong>,
+              the <strong>Geocoding API</strong> and — for commute blocks — the{' '}
+              <strong>Directions API</strong> enabled. Only <code>VITE_</code>-prefixed
               variables reach the browser.
             </p>
           </div>
@@ -119,11 +187,37 @@ export function MapPane({ view, width, theme, focus }: Props) {
           </div>
         )}
 
-        {status === 'ready' && missing && !shortened && (
+        {status === 'ready' && view.commute && !view.route && (
+          <div className="map-toast">
+            {view.commute.from.hint || view.commute.from.value
+              ? 'Nothing to travel to. Set a destination, or put a located block within two hours after this one.'
+              : 'Nothing to travel from. Set a start, or put a located block within two hours before this one.'}
+          </div>
+        )}
+
+        {status === 'ready' && routeError === 'none' && (
+          <div className="map-toast">
+            No {TRAVEL_MODE_LABEL[view.commute?.mode ?? 'transit'].toLowerCase()} route between
+            these two — try another way of getting there.
+          </div>
+        )}
+
+        {status === 'ready' && routeError === 'denied' && (
+          <div className="map-toast">
+            <strong>Directions API isn't enabled</strong> on this key. Turn it on in the Google
+            Cloud console — the map itself needs no such thing, so everything else still works.
+          </div>
+        )}
+
+        {status === 'ready' && routeError === 'failed' && (
+          <div className="map-toast">Couldn't work out a route. The console has the reason.</div>
+        )}
+
+        {status === 'ready' && missing && !shortened && !view.commute && (
           <div className="map-toast">Couldn't find “{view.query.trim()}”</div>
         )}
 
-        {status === 'ready' && shortened && (
+        {status === 'ready' && shortened && !view.commute && (
           <div className="map-toast">
             A short Google Maps link can't be opened from the browser. Open it, then paste the
             full link it lands on — or just the name of the place.
@@ -131,9 +225,17 @@ export function MapPane({ view, width, theme, focus }: Props) {
         )}
       </div>
 
+      {view.commute?.openUrl && (
+        <a className="map-open" href={view.commute.openUrl} target="_blank" rel="noreferrer">
+          <IconRoute size={11} />
+          <span>Directions in Maps</span>
+          <IconExternal size={11} />
+        </a>
+      )}
+
       {/* With nothing to search for, the block's own link is still worth
           offering — following a short one is how you get the full link. */}
-      {(named || view.query.trim() || view.url) && (
+      {!view.commute && (named || view.query.trim() || view.url) && (
         <a
           className="map-open"
           href={named ? mapsSearchUrl(named) : view.query.trim() || view.url}

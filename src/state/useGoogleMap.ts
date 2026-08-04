@@ -8,6 +8,7 @@ import {
   MAP_MAX_ZOOM,
   MAP_MIN_ZOOM,
   MAP_POINT_ZOOM,
+  MAP_ROUTE_BACKOFF,
   MAP_ZOOM_BACKOFF,
 } from '../lib/constants'
 import {
@@ -21,6 +22,7 @@ import {
   zoomForBounds,
 } from '../lib/maps'
 import { clamp } from '../lib/time'
+import type { TravelMode } from '../lib/types'
 
 export type MapStatus = 'no-key' | 'loading' | 'ready' | 'error'
 
@@ -32,6 +34,27 @@ export type ResolvedPlace = {
   zoom: number
 }
 
+/** A trip to draw instead of a place to stand at. Both ends are text — a name,
+ *  or `lat,lng` for an end that has already been resolved. */
+export type MapRoute = {
+  from: string
+  to: string
+  mode: TravelMode
+}
+
+/** What the router came back with, for the pane to print. */
+export type RouteInfo = {
+  duration: string
+  distance: string
+  /** How it went: the transit lines, or the road the driving route is named
+   *  for. Empty when the router didn't say. */
+  via: string
+}
+
+/** Why there is no line on the map. `denied` is the Directions API not being
+ *  enabled on the key, which is the one worth spelling out. */
+export type RouteError = 'none' | 'denied' | 'failed'
+
 export type MapPlace = {
   /** Identifies the block, so a slow answer lands on the right one. */
   key: string
@@ -42,6 +65,8 @@ export type MapPlace = {
   zoom: number | null
   /** Called once, when a lookup succeeds, so the answer can be stored. */
   onResolved: ((place: ResolvedPlace) => void) | null
+  /** Set by a commute block. Takes over from the fields above entirely. */
+  route: MapRoute | null
 }
 
 /** Where the camera should end up: a point, and how close to stand to it. */
@@ -56,6 +81,28 @@ const HOME: Camera = { center: MAP_DEFAULT_CENTER, zoom: MAP_DEFAULT_ZOOM }
  */
 const easePan = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2)
 const easeZoom = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2
+
+/** The route line is drawn on a canvas, not styled by the stylesheet, so its
+ *  colour is read out of the same variable everything else uses. */
+const cssColor = (name: string, fallback: string) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+
+/** An end that already resolved to a point skips the router's own geocode. */
+const waypoint = (text: string): string | google.maps.LatLngLiteral =>
+  parseLatLng(text) ?? text
+
+/** Identifies a question to the router: the two ends and the way there. */
+const routeKey = (want: MapRoute | null) =>
+  want ? `${want.mode}|${want.from}|${want.to}` : ''
+
+/** What to call the way it went. Transit answers with its lines, which is the
+ *  useful part; driving answers with the road it is named for. */
+function viaOf(route: google.maps.DirectionsRoute): string {
+  const lines = (route.legs[0]?.steps ?? [])
+    .map((s) => s.transit?.line?.short_name || s.transit?.line?.name)
+    .filter((name): name is string => !!name)
+  return lines.length ? lines.join(' · ') : route.summary
+}
 
 /**
  * One live map for the life of the pane. Handing it a new place moves the
@@ -78,6 +125,9 @@ export function useGoogleMap(
   const frame = useRef(0)
   /** Whether we ended up on raster tiles after asking for vector. */
   const raster = useRef(false)
+  const directionsRef = useRef<google.maps.DirectionsService | null>(null)
+  const rendererRef = useRef<google.maps.DirectionsRenderer | null>(null)
+  const routeCache = useRef(new Map<string, google.maps.DirectionsResult | RouteError>())
 
   /* Read after an await, where the render that started it is long gone. */
   const resolvedRef = useRef(place.onResolved)
@@ -91,6 +141,14 @@ export function useGoogleMap(
   /** The text a lookup came back empty for, so the message can go away by
    *  itself once the location is edited into something findable. */
   const [failed, setFailed] = useState<string | null>(null)
+  /** What the router last said, tagged with what it was asked. Reading it back
+   *  through the current question is what makes a stale answer disappear on
+   *  its own, the same way `failed` does for a place. */
+  const [answer, setAnswer] = useState<{
+    key: string
+    info: RouteInfo | null
+    error: RouteError | null
+  } | null>(null)
 
   /** Ask Google what is at a point, for something to call it. */
   async function describe(point: google.maps.LatLngLiteral): Promise<string> {
@@ -213,6 +271,69 @@ export function useGoogleMap(
     frame.current = requestAnimationFrame(step)
   }
 
+  /* ---------------------------------------------------------------- routes -- */
+
+  /**
+   * Ask for the way between two ends. Cached per session on the ends and the
+   * mode together, so flipping between two commute blocks — or back to one you
+   * looked at a minute ago — costs nothing.
+   *
+   * A failure is cached too, as the reason: the two ends genuinely not being
+   * connected doesn't become connected by asking twice.
+   */
+  async function findRoute(want: MapRoute): Promise<google.maps.DirectionsResult | RouteError> {
+    const key = routeKey(want)
+    const cached = routeCache.current.get(key)
+    if (cached !== undefined) return cached
+
+    const service = (directionsRef.current ??= new google.maps.DirectionsService())
+    try {
+      const result = await service.route({
+        origin: waypoint(want.from),
+        destination: waypoint(want.to),
+        travelMode: google.maps.TravelMode[want.mode.toUpperCase() as Uppercase<TravelMode>],
+      })
+      routeCache.current.set(key, result)
+      return result
+    } catch (err: unknown) {
+      const text = String(err)
+      // ZERO_RESULTS is an answer — no transit at that hour, or an ocean in
+      // between. REQUEST_DENIED is the Directions API not being enabled, which
+      // is a setup problem and says so. A network blip is neither, and isn't
+      // cached, so it recovers without an edit.
+      const reason: RouteError = text.includes('ZERO_RESULTS')
+        ? 'none'
+        : text.includes('REQUEST_DENIED')
+          ? 'denied'
+          : 'failed'
+      if (reason === 'failed') console.warn('[map] directions failed', err)
+      else routeCache.current.set(key, reason)
+      return reason
+    }
+  }
+
+  /** Put the line on the map, or take it off. */
+  function showRoute(result: google.maps.DirectionsResult | null) {
+    const map = mapRef.current
+    if (!map) return
+    if (!result) {
+      rendererRef.current?.setMap(null)
+      return
+    }
+    const renderer = (rendererRef.current ??= new google.maps.DirectionsRenderer({
+      // The camera is ours. Left to itself the renderer cuts straight to the
+      // route's bounds, which is the one thing the flight exists to avoid.
+      preserveViewport: true,
+      polylineOptions: {
+        strokeColor: cssColor('--accent', '#2c6bed'),
+        strokeOpacity: 0.9,
+        strokeWeight: 5,
+      },
+    }))
+    renderer.setMap(map)
+    renderer.setDirections(result)
+  }
+
   function showMarker(at: google.maps.LatLngLiteral | null) {
     const map = mapRef.current
     const marker = markerRef.current
@@ -252,7 +373,11 @@ export function useGoogleMap(
           : HOME
 
         el.replaceChildren()
+        // Both are bound to the map that is about to be thrown away. The
+        // renderer is rebuilt on the next route, which is also what re-reads
+        // the line colour for the new theme.
         markerRef.current = null
+        rendererRef.current = null
         const map = new google.maps.Map(el, {
           ...from,
           mapId: mapIdFor(theme),
@@ -314,6 +439,54 @@ export function useGoogleMap(
 
   useEffect(() => {
     if (!built) return
+    const want = place.route
+
+    if (want) {
+      let cancelled = false
+      const key = routeKey(want)
+      showMarker(null)
+      void findRoute(want).then((result) => {
+        if (cancelled) return
+        if (typeof result === 'string') {
+          showRoute(null)
+          setAnswer({ key, info: null, error: result })
+          return
+        }
+        const best = result.routes[0]
+        const leg = best.legs[0]
+        showRoute(result)
+        setAnswer({
+          key,
+          info: {
+            duration: leg?.duration?.text ?? '',
+            distance: leg?.distance?.text ?? '',
+            via: viaOf(best),
+          },
+          error: null,
+        })
+        // The renderer draws the line; the camera is still flown, so arriving
+        // at a route reads the same as arriving at a place.
+        const el = containerRef.current
+        if (best.bounds && el) {
+          flyTo({
+            center: best.bounds.getCenter().toJSON(),
+            zoom: clamp(
+              zoomForBounds(best.bounds, el.clientWidth, el.clientHeight) - MAP_ROUTE_BACKOFF,
+              MAP_MIN_ZOOM,
+              MAP_MAX_ZOOM,
+            ),
+          })
+        }
+      })
+      return () => {
+        cancelled = true
+      }
+    }
+
+    // Not a commute any more: the line goes with it. The answer above is left
+    // alone — it is read back through the current question, so it is already
+    // out of the picture.
+    showRoute(null)
 
     // Already resolved and saved: no lookup, just go.
     if (place.lat != null && place.lng != null) {
@@ -343,11 +516,25 @@ export function useGoogleMap(
     }
     // The helpers above read everything else through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [place.key, place.query, place.lat, place.lng, place.zoom, built])
+  }, [
+    place.key,
+    place.query,
+    place.lat,
+    place.lng,
+    place.zoom,
+    place.route?.from,
+    place.route?.to,
+    place.route?.mode,
+    built,
+  ])
 
   // Only the text that actually came back empty, and only while it is still
   // the text on screen and still unresolved.
   const missing = failed !== null && failed === place.query.trim() && place.lat == null
 
-  return { status, missing }
+  // Likewise: the router's answer counts only while it answers what is being
+  // asked now. Anything else is a leftover from the last selection.
+  const current = answer?.key === routeKey(place.route) ? answer : null
+
+  return { status, missing, route: current?.info ?? null, routeError: current?.error ?? null }
 }

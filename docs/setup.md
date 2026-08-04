@@ -104,15 +104,21 @@ drop table if exists block_links, canvas_blocks, timeline_blocks, boards cascade
 Then run `schema.sql` again. Your browser's local copy is separate and lives
 under the `itinerary.boards.v2` key in local storage.
 
-If you set the project up before the map pane existed, you don't need to wipe
-anything. `create table if not exists` leaves an existing table alone, so the
-location columns won't appear on their own — run
-[`supabase/migrations/001-block-locations.sql`](../supabase/migrations/001-block-locations.sql)
-in the SQL editor, which adds just those. Re-running the whole of `schema.sql`
-does the same thing and is equally safe.
+## Adding to a project you already have
 
-Until you do, saving a time block fails and the toolbar says `Save failed`,
-because the app is writing columns the table hasn't got.
+`create table if not exists` leaves an existing table alone, so new columns
+never appear on their own. Run the migration for whatever you're missing, in
+the SQL editor. Re-running the whole of `schema.sql` does the same thing and is
+equally safe — the migrations are just the smaller version.
+
+| Set up before | Run |
+| --- | --- |
+| the map pane | [`001-block-locations.sql`](../supabase/migrations/001-block-locations.sql) — `place`, `place_lat`, and the rest |
+| commute blocks | [`002-commute-blocks.sql`](../supabase/migrations/002-commute-blocks.sql) — `kind`, `from_place`, `to_place`, `travel_mode` |
+
+**Until you do, saving any time block fails and the toolbar says `Save failed`**
+— the app writes every column, so one missing column takes all of them down,
+not just the new feature. Restarting the dev server does not help.
 
 # Setting up the map
 
@@ -123,22 +129,26 @@ is why it's the Maps JavaScript API and not an embedded iframe.
 ## 1. Get a key
 
 In the [Google Cloud console](https://console.cloud.google.com), pick or create
-a project, then under **APIs & Services → Library**, enable two things:
+a project, then under **APIs & Services → Library**, enable three things:
 
 - **Maps JavaScript API**, which draws the map.
 - **Geocoding API**, which turns "Gyeongbokgung Palace, Seoul" into a point to
   fly to. It also returns how big the place is, which is how the map knows to
   stop closer for a building than for a city.
+- **Directions API**, which works out the route a commute block draws between
+  two places, and how long it takes.
 
 Then **APIs & Services → Credentials → Create credentials → API key**.
 
 Enabling only the first is the mistake to watch for: the map draws, every
 location fails to resolve, and the pane just says it couldn't find the place.
+Skipping the third is the same story one level down — everything works until
+you select a commute block, which then says the Directions API isn't enabled.
 
 You'll be asked to attach a billing account — Google asks for one across Maps
-Platform. Both APIs have a free monthly allowance that a trip board will not
-come close to, and geocodes are cached for the session, so re-selecting a block
-you've already looked at costs nothing.
+Platform. All three have a free monthly allowance that a trip board will not
+come close to, and both geocodes and routes are cached for the session, so
+re-selecting a block you've already looked at costs nothing.
 
 ## 2. Put it in `.env`
 
@@ -161,7 +171,8 @@ the protection. On the key's page in Credentials:
 
 - **Application restrictions → Websites**, listing the origins you serve from
   (`http://localhost:5173` for development, plus wherever you deploy).
-- **API restrictions → Restrict key →** Maps JavaScript API and Geocoding API.
+- **API restrictions → Restrict key →** Maps JavaScript API, Geocoding API and
+  Directions API.
 
 ## 4. Optionally, a Map ID — and a style
 

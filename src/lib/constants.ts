@@ -1,4 +1,4 @@
-import type { ColorName } from './types'
+import type { ColorName, TravelMode } from './types'
 
 /* ------------------------------------------------------------------ time -- */
 
@@ -13,6 +13,15 @@ export const DAY_STRIDE = DAY_HEIGHT + DAY_GAP
 /** Everything on the rail snaps to this grid. */
 export const SNAP_MIN = 15
 export const MIN_DURATION = 15
+
+/* --------------------------------------------------------------- commute -- */
+
+/** How long a new commute block runs before you resize it. */
+export const COMMUTE_DEFAULT_MIN = 30
+/** How far either side of a commute block to look for the places it joins.
+ *  Past this the next thing on the rail isn't what you are travelling to, it
+ *  is just the next thing on the rail — so the block asks instead of guessing. */
+export const COMMUTE_GAP_MAX = 120
 
 /* -------------------------------------------------------------- geometry -- */
 
@@ -71,6 +80,10 @@ export const MAP_MAX_ZOOM = 16
 export const MAP_ZOOM_BACKOFF = 1.4
 /** Bare coordinates carry no viewport to fit, so they land here. */
 export const MAP_POINT_ZOOM = 15
+/** Held back from the exact fit of a route's bounds, so the line has margin
+ *  at the ends. Smaller than the backoff for a single place — a route already
+ *  spans two of them. */
+export const MAP_ROUTE_BACKOFF = 0.5
 
 /** Width of the preview pane, and how far the divider may be dragged. */
 export const MAP_PANE_DEFAULT = 460
@@ -89,6 +102,19 @@ export const COLORS: ColorName[] = [
   'pink',
   'slate',
 ]
+
+/* --------------------------------------------------------- travel modes -- */
+
+/** Transit first: this is a city trip, and it is the mode whose answer you
+ *  can't guess. The order is the order they appear in the pane. */
+export const TRAVEL_MODES: TravelMode[] = ['transit', 'walking', 'driving', 'bicycling']
+
+export const TRAVEL_MODE_LABEL: Record<TravelMode, string> = {
+  transit: 'Transit',
+  walking: 'Walk',
+  driving: 'Drive',
+  bicycling: 'Bike',
+}
 
 export const COLOR_LABEL: Record<ColorName, string> = {
   blue: 'Blue',

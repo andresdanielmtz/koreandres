@@ -6,6 +6,7 @@ import type {
   Link,
   Snapshot,
   TimelineBlock,
+  TravelMode,
 } from './types'
 
 export type BoardSummary = Pick<Board, 'id' | 'title' | 'startDate' | 'days'>
@@ -45,6 +46,7 @@ const boardFromRow = (r: Row): Board => ({
 const timelineFromRow = (r: Row): TimelineBlock => ({
   id: r.id as string,
   boardId: r.board_id as string,
+  kind: (r.kind as TimelineBlock['kind']) ?? 'event',
   title: (r.title as string) ?? '',
   notes: (r.notes as string) ?? '',
   dayIndex: r.day_index as number,
@@ -57,11 +59,15 @@ const timelineFromRow = (r: Row): TimelineBlock => ({
   placeZoom: (r.place_zoom as number | null) ?? null,
   url: (r.url as string) ?? '',
   color: (r.color as ColorName) ?? 'blue',
+  fromPlace: (r.from_place as string) ?? '',
+  toPlace: (r.to_place as string) ?? '',
+  travelMode: (r.travel_mode as TravelMode) ?? 'transit',
 })
 
 const timelineToRow = (b: TimelineBlock): Row => ({
   id: b.id,
   board_id: b.boardId,
+  kind: b.kind,
   title: b.title,
   notes: b.notes,
   day_index: b.dayIndex,
@@ -74,6 +80,9 @@ const timelineToRow = (b: TimelineBlock): Row => ({
   place_zoom: b.placeZoom,
   url: b.url,
   color: b.color,
+  from_place: b.fromPlace,
+  to_place: b.toPlace,
+  travel_mode: b.travelMode,
 })
 
 const canvasFromRow = (r: Row): CanvasBlock => ({
@@ -265,19 +274,23 @@ function createLocalStore(): ItineraryStore {
     async loadBoard(id) {
       const snap = readDb()[id]
       if (!snap) throw new Error('Board not found')
-      // Boards saved before the location fields existed are still on disk.
-      // Fill the gaps on read — the cloud store gets the same for free from
-      // its column defaults.
+      // Boards saved before the location or commute fields existed are still
+      // on disk. Fill the gaps on read — the cloud store gets the same for
+      // free from its column defaults.
       return {
         ...snap,
         timeline: snap.timeline.map((b) => ({
           ...b,
+          kind: b.kind ?? 'event',
           place: b.place ?? '',
           placeLabel: b.placeLabel ?? '',
           placeLat: b.placeLat ?? null,
           placeLng: b.placeLng ?? null,
           placeZoom: b.placeZoom ?? null,
           url: b.url ?? '',
+          fromPlace: b.fromPlace ?? '',
+          toPlace: b.toPlace ?? '',
+          travelMode: b.travelMode ?? 'transit',
         })),
       }
     },

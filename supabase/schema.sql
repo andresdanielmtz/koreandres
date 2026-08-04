@@ -23,6 +23,9 @@ create table if not exists public.boards (
 create table if not exists public.timeline_blocks (
   id         uuid primary key default gen_random_uuid(),
   board_id   uuid        not null references public.boards (id) on delete cascade,
+  -- 'event' happens somewhere; 'commute' is the getting between two of them,
+  -- and carries a route (the three columns at the bottom) instead of a place.
+  kind       text        not null default 'event' check (kind in ('event', 'commute')),
   title      text        not null default '',
   notes      text        not null default '',
   day_index  integer     not null default 0,
@@ -38,6 +41,12 @@ create table if not exists public.timeline_blocks (
   place_zoom  double precision,
   url         text       not null default '',
   color      text        not null default 'blue',
+  -- Commute only. Either end left empty means "work it out from the blocks
+  -- either side of me", which the client does without asking the database.
+  from_place  text       not null default '',
+  to_place    text       not null default '',
+  travel_mode text       not null default 'transit'
+    check (travel_mode in ('transit', 'walking', 'driving', 'bicycling')),
   created_at timestamptz not null default now(),
   constraint timeline_blocks_span check (end_min > start_min),
   constraint timeline_blocks_place_point check (
@@ -48,15 +57,31 @@ create table if not exists public.timeline_blocks (
 );
 
 -- `create table if not exists` leaves an existing table alone, so a project
--- created before the map pane needs the columns added. This is the same thing
--- supabase/migrations/001-block-locations.sql does on its own.
+-- created before the map pane or before commute blocks needs the columns
+-- added. This is the same thing the files in supabase/migrations/ do on their
+-- own, and running this whole file is an alternative to running them.
 alter table public.timeline_blocks
   add column if not exists place       text not null default '',
   add column if not exists place_label text not null default '',
   add column if not exists place_lat   double precision,
   add column if not exists place_lng   double precision,
   add column if not exists place_zoom  double precision,
-  add column if not exists url         text not null default '';
+  add column if not exists url         text not null default '',
+  add column if not exists kind        text not null default 'event',
+  add column if not exists from_place  text not null default '',
+  add column if not exists to_place    text not null default '',
+  add column if not exists travel_mode text not null default 'transit';
+
+-- The checks are re-stated because `add column if not exists` skips the
+-- constraint along with the column on a table that already has it.
+alter table public.timeline_blocks
+  drop constraint if exists timeline_blocks_kind,
+  drop constraint if exists timeline_blocks_travel_mode;
+
+alter table public.timeline_blocks
+  add constraint timeline_blocks_kind check (kind in ('event', 'commute')),
+  add constraint timeline_blocks_travel_mode
+    check (travel_mode in ('transit', 'walking', 'driving', 'bicycling'));
 
 create index if not exists timeline_blocks_board_idx on public.timeline_blocks (board_id);
 

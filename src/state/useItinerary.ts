@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   CANVAS_DEFAULT_H,
   CANVAS_DEFAULT_W,
+  COMMUTE_DEFAULT_MIN,
   DEFAULT_DAYS,
   DEFAULT_START_DATE,
   DEFAULT_TITLE,
@@ -19,6 +20,7 @@ import type {
   Ref,
   Snapshot,
   TimelineBlock,
+  TimelineKind,
 } from '../lib/types'
 
 export type SaveStatus = 'idle' | 'saving' | 'error'
@@ -33,6 +35,7 @@ function seedContent(boardId: string): Omit<Snapshot, 'board'> {
   const t1: TimelineBlock = {
     id: newId(),
     boardId,
+    kind: 'event',
     title: 'Shopping at Hongdae',
     notes: '',
     dayIndex: SEED_DAY,
@@ -47,10 +50,14 @@ function seedContent(boardId: string): Omit<Snapshot, 'board'> {
     placeZoom: null,
     url: '',
     color: 'blue',
+    fromPlace: '',
+    toPlace: '',
+    travelMode: 'transit',
   }
   const t2: TimelineBlock = {
     id: newId(),
     boardId,
+    kind: 'event',
     title: 'Palace — Gyeongbokgung',
     notes: '',
     dayIndex: SEED_DAY,
@@ -63,6 +70,31 @@ function seedContent(boardId: string): Omit<Snapshot, 'board'> {
     placeZoom: null,
     url: '',
     color: 'green',
+    fromPlace: '',
+    toPlace: '',
+    travelMode: 'transit',
+  }
+  // Both ends left empty on purpose: it sits in the hour between the two
+  // above, which is all it needs to work out what it joins.
+  const t3: TimelineBlock = {
+    id: newId(),
+    boardId,
+    kind: 'commute',
+    title: '',
+    notes: '',
+    dayIndex: SEED_DAY,
+    startMin: 13 * 60 + 15,
+    endMin: 13 * 60 + 45,
+    place: '',
+    placeLabel: '',
+    placeLat: null,
+    placeLng: null,
+    placeZoom: null,
+    url: '',
+    color: 'slate',
+    fromPlace: '',
+    toPlace: '',
+    travelMode: 'transit',
   }
   const c1: CanvasBlock = {
     id: newId(),
@@ -85,7 +117,7 @@ function seedContent(boardId: string): Omit<Snapshot, 'board'> {
     targetKind: 'canvas',
     targetId: c1.id,
   }
-  return { timeline: [t1, t2], canvas: [c1], links: [link] }
+  return { timeline: [t1, t2, t3], canvas: [c1], links: [link] }
 }
 
 export function useItinerary() {
@@ -229,18 +261,25 @@ export function useItinerary() {
 
   /* ------------------------------------------------------ timeline blocks -- */
 
-  function addTimelineBlock(dayIndex: number, startMin: number, color: ColorName = 'blue') {
+  function addTimelineBlock(
+    dayIndex: number,
+    startMin: number,
+    color: ColorName = 'blue',
+    kind: TimelineKind = 'event',
+  ) {
     const current = snapRef.current
     if (!current || !store) return null
-    const start = clamp(snap(startMin), 0, MIN_PER_DAY - 60)
+    const span = kind === 'commute' ? COMMUTE_DEFAULT_MIN : 60
+    const start = clamp(snap(startMin), 0, MIN_PER_DAY - span)
     const block: TimelineBlock = {
       id: newId(),
       boardId: current.board.id,
+      kind,
       title: '',
       notes: '',
       dayIndex: clamp(dayIndex, 0, current.board.days - 1),
       startMin: start,
-      endMin: Math.min(MIN_PER_DAY, start + 60),
+      endMin: Math.min(MIN_PER_DAY, start + span),
       place: '',
       placeLabel: '',
       placeLat: null,
@@ -248,6 +287,9 @@ export function useItinerary() {
       placeZoom: null,
       url: '',
       color,
+      fromPlace: '',
+      toPlace: '',
+      travelMode: 'transit',
     }
     patchSnapshot((s) => ({ ...s, timeline: [...s.timeline, block] }))
     enqueue(`t:${block.id}`, () => store.upsertTimeline(block))
@@ -394,11 +436,14 @@ export function useItinerary() {
       if (!src) return null
       const span = src.endMin - src.startMin
       const startMin = clamp(src.endMin, 0, MIN_PER_DAY - MIN_DURATION)
-      const copy = addTimelineBlock(src.dayIndex, startMin, src.color)
+      const copy = addTimelineBlock(src.dayIndex, startMin, src.color, src.kind)
       if (!copy) return null
       updateTimeline(copy.id, {
         title: src.title,
         notes: src.notes,
+        fromPlace: src.fromPlace,
+        toPlace: src.toPlace,
+        travelMode: src.travelMode,
         place: src.place,
         placeLabel: src.placeLabel,
         placeLat: src.placeLat,

@@ -31,9 +31,10 @@ The map pane wants one more line in that same `.env`:
 VITE_GOOGLE_MAPS_API_KEY=your-key
 ```
 
-A Google Cloud API key with two APIs enabled on it: **Maps JavaScript API** to
-draw the map, and **Geocoding API** to turn a place you've typed into somewhere
-to fly to. One thing it can't do: the short `maps.app.goo.gl` links the share
+A Google Cloud API key with three APIs enabled on it: **Maps JavaScript API** to
+draw the map, **Geocoding API** to turn a place you've typed into somewhere to
+fly to, and **Directions API** for the route a commute block draws between two
+of them. One thing it can't do: the short `maps.app.goo.gl` links the share
 button gives you only resolve by following their redirect, which a page with no
 server of its own isn't allowed to do. Open one and paste the full link it
 lands on, or just the name of the place. Without it the app still runs; the pane tells you which variable is
