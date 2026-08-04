@@ -3,15 +3,13 @@ import {
   DAY_HEIGHT,
   DAY_STRIDE,
   GUTTER_W,
-  LANE_W,
   LANE_X,
   PX_PER_MIN,
+  RAIL_LEFT,
+  RAIL_RIGHT,
 } from '../lib/constants'
 import { dayTop, formatDayLabel, formatTime, formatWeekday } from '../lib/time'
 import { IconPlus } from './icons'
-
-const RULE_LEFT = -330
-const RULE_RIGHT = LANE_X + LANE_W + 640
 
 /** Hours that get a printed label; the rest are hairline ticks only.
  *  Midnight is omitted — the date header already marks that boundary. */
@@ -49,14 +47,14 @@ export function Rail({ days, startDate, onAddDay }: Props) {
               <rect
                 x={-GUTTER_W}
                 y={top}
-                width={RULE_RIGHT + GUTTER_W}
+                width={RAIL_RIGHT + GUTTER_W}
                 height={7 * 60 * PX_PER_MIN}
                 className="rail-night"
               />
               <rect
                 x={-GUTTER_W}
                 y={top + 21 * 60 * PX_PER_MIN}
-                width={RULE_RIGHT + GUTTER_W}
+                width={RAIL_RIGHT + GUTTER_W}
                 height={3 * 60 * PX_PER_MIN}
                 className="rail-night"
               />
@@ -66,7 +64,7 @@ export function Rail({ days, startDate, onAddDay }: Props) {
                   key={h}
                   x1={-GUTTER_W}
                   y1={top + h * 60 * PX_PER_MIN}
-                  x2={RULE_RIGHT}
+                  x2={RAIL_RIGHT}
                   y2={top + h * 60 * PX_PER_MIN}
                   className="rail-tick"
                   data-major={h % 6 === 0 ? '' : undefined}
@@ -76,9 +74,9 @@ export function Rail({ days, startDate, onAddDay }: Props) {
 
               {/* Day boundary. */}
               <line
-                x1={RULE_LEFT}
+                x1={RAIL_LEFT}
                 y1={top}
-                x2={RULE_RIGHT}
+                x2={RAIL_RIGHT}
                 y2={top}
                 className="rail-day-rule"
                 vectorEffect="non-scaling-stroke"
@@ -88,9 +86,9 @@ export function Rail({ days, startDate, onAddDay }: Props) {
         })}
 
         <line
-          x1={RULE_LEFT}
+          x1={RAIL_LEFT}
           y1={total - DAY_STRIDE + DAY_HEIGHT}
-          x2={RULE_RIGHT}
+          x2={RAIL_RIGHT}
           y2={total - DAY_STRIDE + DAY_HEIGHT}
           className="rail-day-rule"
           vectorEffect="non-scaling-stroke"

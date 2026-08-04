@@ -59,6 +59,18 @@ export const IconArrow = ({ size = 12 }: Props) => (
   </svg>
 )
 
+export const IconArrowUp = ({ size = 12 }: Props) => (
+  <svg {...base(size)} strokeWidth={1.8}>
+    <path d="M8 13V4M4.5 7.5 8 4l3.5 3.5" />
+  </svg>
+)
+
+export const IconArrowDown = ({ size = 12 }: Props) => (
+  <svg {...base(size)} strokeWidth={1.8}>
+    <path d="M8 3v9M4.5 8.5 8 12l3.5-3.5" />
+  </svg>
+)
+
 export const IconChevron = ({ size = 14 }: Props) => (
   <svg {...base(size)}>
     <path d="m5.5 6.5 2.5 3 2.5-3" />

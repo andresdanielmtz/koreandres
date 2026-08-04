@@ -48,6 +48,9 @@ moving around re-renders nothing. `useViewport` writes that transform straight
 to the DOM every frame and keeps React out of it — the `scale` it returns as
 state exists for the toolbar's "100%" readout and nothing else. Never drive the
 transform from React state. Convert with `viewport.toBoard(clientX, clientY)`.
+Pans and zooms are clamped to `boardBounds()` — the occupied box plus
+`PAN_MARGIN` — so anything that changes where content sits has to be reflected
+there or you'll be able to pan into a void again.
 
 **Days are numbers, not dates.** A `TimelineBlock` stores `dayIndex` plus
 `startMin`/`endMin` (minutes from midnight, 0–1440). The board's `startDate`

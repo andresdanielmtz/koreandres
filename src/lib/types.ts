@@ -66,5 +66,8 @@ export type Snapshot = {
 
 export type Rect = { x: number; y: number; w: number; h: number }
 
+/** An axis-aligned box in board space, as edges rather than size. */
+export type Bounds = { minX: number; minY: number; maxX: number; maxY: number }
+
 export const refEq = (a: Ref | null, b: Ref | null) =>
   !!a && !!b && a.kind === b.kind && a.id === b.id

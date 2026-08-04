@@ -1,6 +1,16 @@
-import { LANE_GAP, LANE_W, LANE_X, PX_PER_MIN } from './constants'
-import { timeToY } from './time'
-import type { CanvasBlock, Rect, Ref, TimelineBlock } from './types'
+import {
+  DAY_HEIGHT,
+  LANE_GAP,
+  LANE_W,
+  LANE_X,
+  PAN_MARGIN,
+  PX_PER_MIN,
+  RAIL_FOOT,
+  RAIL_LEFT,
+  RAIL_RIGHT,
+} from './constants'
+import { dayTop, timeToY } from './time'
+import type { Bounds, CanvasBlock, Rect, Ref, TimelineBlock } from './types'
 
 export type Lane = { lane: number; lanes: number }
 
@@ -74,6 +84,35 @@ export const canvasRect = (block: CanvasBlock): Rect => ({
   w: block.width,
   h: block.height,
 })
+
+/** Top of the rail spine, which reaches a little above day one. */
+const RAIL_TOP = -56
+
+/**
+ * Everything the board occupies, plus a margin. The pan clamp keeps this box
+ * covering the viewport, so you can never drift off into empty space — loose
+ * canvas cards widen it as they are dragged out.
+ */
+export function boardBounds(days: number, canvas: CanvasBlock[]): Bounds {
+  let minX = RAIL_LEFT
+  let minY = RAIL_TOP
+  let maxX = RAIL_RIGHT
+  let maxY = dayTop(days - 1) + DAY_HEIGHT + RAIL_FOOT
+
+  for (const b of canvas) {
+    minX = Math.min(minX, b.x)
+    minY = Math.min(minY, b.y)
+    maxX = Math.max(maxX, b.x + b.width)
+    maxY = Math.max(maxY, b.y + b.height)
+  }
+
+  return {
+    minX: minX - PAN_MARGIN,
+    minY: minY - PAN_MARGIN,
+    maxX: maxX + PAN_MARGIN,
+    maxY: maxY + PAN_MARGIN,
+  }
+}
 
 /* ----------------------------------------------------------------- links -- */
 
