@@ -7,6 +7,10 @@ import {
   GUTTER_W,
   LANE_W,
   LANE_X,
+  MAP_DEFAULT_LABEL,
+  MAP_PANE_DEFAULT,
+  MAP_PANE_MAX_RATIO,
+  MAP_PANE_MIN,
   MIN_DURATION,
   MIN_PER_DAY,
   PX_PER_MIN,
@@ -19,7 +23,8 @@ import {
   rectsOverlap,
   timelineRect,
 } from '../lib/geometry'
-import { clamp, dayTop, formatTime, snap, timeToY, yToTime } from '../lib/time'
+import { placeFromUrl } from '../lib/maps'
+import { clamp, dayTop, formatDayLabel, formatTime, snap, timeToY, yToTime } from '../lib/time'
 import { refEq } from '../lib/types'
 import type { CanvasBlock, ColorName, Ref, Rect, Snapshot } from '../lib/types'
 import type { Itinerary } from '../state/useItinerary'
@@ -28,6 +33,7 @@ import { useViewport } from '../state/useViewport'
 import { CanvasBlockView, type ResizeDir } from './CanvasBlockView'
 import { ContextMenu, type MenuEntry } from './ContextMenu'
 import { LinkLayer, type Draft } from './LinkLayer'
+import { MapPane, type MapField, type MapView } from './MapPane'
 import { Rail } from './Rail'
 import { Toolbar } from './Toolbar'
 import { TimelineBlockView, type ResizeEdge } from './TimelineBlockView'
@@ -37,6 +43,7 @@ import {
   IconCopy,
   IconLink,
   IconNote,
+  IconPin,
   IconPlus,
   IconRoute,
   IconTarget,
@@ -50,6 +57,17 @@ type DraftState = { source: Ref; board: { x: number; y: number }; client: { x: n
 
 /** Where a day boundary is parked, in pixels down from the top of the viewport. */
 const DAY_ANCHOR_Y = 88
+
+/** Width of the map pane, remembered per browser. */
+const PANE_KEY = 'itinerary.mapPane'
+
+const clampPane = (w: number) =>
+  clamp(w, MAP_PANE_MIN, Math.max(MAP_PANE_MIN, window.innerWidth * MAP_PANE_MAX_RATIO))
+
+function readPaneWidth(): number {
+  const saved = Number(localStorage.getItem(PANE_KEY))
+  return clampPane(Number.isFinite(saved) && saved > 0 ? saved : MAP_PANE_DEFAULT)
+}
 
 const isEditable = (el: EventTarget | null) => {
   const node = el as HTMLElement | null
@@ -70,6 +88,9 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
   const [draft, setDraft] = useState<DraftState | null>(null)
   const [dragging, setDragging] = useState(false)
   const [marquee, setMarquee] = useState<Rect | null>(null)
+  const [paneW, setPaneW] = useState(readPaneWidth)
+  const [splitting, setSplitting] = useState(false)
+  const [mapFocus, setMapFocus] = useState<{ field: MapField } | null>(null)
 
   const lanes = packLanes(timeline)
 
@@ -352,16 +373,31 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         icon: <IconNote size={13} />,
         onSelect: () => setEditing({ ref, field: 'title' }),
       },
-      ...(ref.kind === 'canvas'
+      // A time block keeps its location and link in the map pane rather than on
+      // the block, so these open the pane's fields instead of an inline editor.
+      ...(ref.kind === 'timeline'
         ? [
+            {
+              kind: 'item' as const,
+              label: 'Set location',
+              icon: <IconPin size={13} />,
+              onSelect: () => setMapFocus({ field: 'place' }),
+            },
+            {
+              kind: 'item' as const,
+              label: 'Edit link URL',
+              icon: <IconLink size={13} />,
+              onSelect: () => setMapFocus({ field: 'url' }),
+            },
+          ]
+        : [
             {
               kind: 'item' as const,
               label: 'Edit link URL',
               icon: <IconLink size={13} />,
               onSelect: () => setEditing({ ref, field: 'url' }),
             },
-          ]
-        : []),
+          ]),
       {
         kind: 'item',
         label: 'Duplicate',
@@ -530,6 +566,130 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     const next = step > 0 ? current + 1 : raw - current > 0.01 ? current : current - 1
     viewport.panBy(0, (anchored - dayTop(clamp(next, 0, board.days - 1))) * v.scale)
   }
+
+  /* -------------------------------------------------------------- preview -- */
+
+  /**
+   * What the map on the right is looking at. One selected block wins; a time
+   * block answers with its own location, a loose card with whatever place its
+   * link carries. Anything else — nothing selected, or a group — falls back to
+   * the city.
+   */
+  function mapView(): MapView {
+    const only = selection.length === 1 ? selection[0] : null
+
+    const block = only?.kind === 'timeline' ? timeline.find((b) => b.id === only.id) : null
+    if (block) {
+      return {
+        id: `timeline:${block.id}`,
+        title: block.title || block.placeLabel || 'Untitled',
+        meta: `${formatDayLabel(board.startDate, block.dayIndex)} · ${formatTime(block.startMin)} – ${formatTime(block.endMin)}`,
+        // The location field is the one that matters, but a Maps link left in
+        // the link field still counts as saying where the block is.
+        query: block.place.trim() || (placeFromUrl(block.url) ? block.url : ''),
+        lat: block.placeLat,
+        lng: block.placeLng,
+        zoom: block.placeZoom,
+        label: block.placeLabel,
+        place: block.place,
+        url: block.url,
+        // Editing the location throws away what the old one resolved to, so
+        // the new text is looked up rather than flown to the old point.
+        onPlace: (place) =>
+          itinerary.updateTimeline(block.id, {
+            place,
+            placeLabel: '',
+            placeLat: null,
+            placeLng: null,
+            placeZoom: null,
+          }),
+        onUrl: (url) => itinerary.updateTimeline(block.id, { url }),
+        onResolved: (found) =>
+          itinerary.updateTimeline(block.id, {
+            placeLabel: found.label,
+            placeLat: found.lat,
+            placeLng: found.lng,
+            placeZoom: found.zoom,
+            // Pasting a link is meant to be the whole job, so a block that
+            // was never named takes the name of the place. One you've titled
+            // yourself is left alone.
+            ...(block.title.trim() ? {} : { title: found.label }),
+          }),
+      }
+    }
+
+    const card = only?.kind === 'canvas' ? canvas.find((b) => b.id === only.id) : null
+    if (card) {
+      const travel = card.kind === 'travel'
+      return {
+        id: `canvas:${card.id}`,
+        title: card.title || (travel ? 'Travel leg' : 'Untitled data'),
+        meta: travel ? 'Travel block' : 'Data block',
+        query: placeFromUrl(card.url) ? card.url : '',
+        lat: null,
+        lng: null,
+        zoom: null,
+        label: '',
+        place: '',
+        url: card.url,
+        onPlace: null,
+        onUrl: null,
+        // A loose card has nowhere to keep the answer, so it looks up each
+        // time — the cache in the hook means that costs one request a session.
+        onResolved: null,
+      }
+    }
+
+    return {
+      id: '',
+      title: MAP_DEFAULT_LABEL,
+      meta:
+        selection.length > 1
+          ? `${selection.length} blocks selected`
+          : 'Select a block to see where it is',
+      query: '',
+      lat: null,
+      lng: null,
+      zoom: null,
+      label: '',
+      place: '',
+      url: '',
+      onPlace: null,
+      onUrl: null,
+      onResolved: null,
+    }
+  }
+
+  /** Drag the divider. The pane is measured from the right edge of the window,
+   *  so the width follows the pointer without tracking where it started. */
+  function startSplit(e: React.PointerEvent) {
+    if (e.button !== 0) return
+    e.preventDefault()
+    setSplitting(true)
+    let width = paneW
+
+    const move = (ev: PointerEvent) => {
+      width = clampPane(window.innerWidth - ev.clientX)
+      setPaneW(width)
+    }
+    const end = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+      setSplitting(false)
+      localStorage.setItem(PANE_KEY, String(Math.round(width)))
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+  }
+
+  /* A narrower window can leave the saved pane wider than the cap allows. */
+  useEffect(() => {
+    const onResize = () => setPaneW((w) => clampPane(w))
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   /* -------------------------------------------------------------- marquee -- */
 
@@ -703,8 +863,16 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
   const isTargeted = (ref: Ref) =>
     !!draft?.target && draft.target.kind === ref.kind && draft.target.id === ref.id
 
+  // A cross-origin iframe swallows the pointer, so the map stops taking events
+  // for the length of any gesture that might travel across it.
+  const busy = dragging || splitting || viewport.panning || !!draft
+
   return (
-    <div className="app">
+    <div
+      className="app"
+      data-busy={busy ? '' : undefined}
+      data-splitting={splitting ? '' : undefined}
+    >
       <Toolbar
         board={board}
         boards={itinerary.boards}
@@ -721,112 +889,124 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         onResetView={viewport.reset}
       />
 
-      <div
-        ref={viewportRef}
-        className="viewport"
-        data-panning={viewport.panning ? '' : undefined}
-        data-space={viewport.spaceHeld ? '' : undefined}
-        data-dragging={dragging ? '' : undefined}
-        data-linking={draft ? '' : undefined}
-        onPointerDown={onBackgroundDown}
-        onDoubleClick={onBackgroundDoubleClick}
-        onContextMenu={openBackgroundMenu}
-      >
-        <div ref={contentRef} className="content">
-          <div className="grid" />
+      <div className="stage">
+        <div
+          ref={viewportRef}
+          className="viewport"
+          data-panning={viewport.panning ? '' : undefined}
+          data-space={viewport.spaceHeld ? '' : undefined}
+          data-dragging={dragging ? '' : undefined}
+          data-linking={draft ? '' : undefined}
+          onPointerDown={onBackgroundDown}
+          onDoubleClick={onBackgroundDoubleClick}
+          onContextMenu={openBackgroundMenu}
+        >
+          <div ref={contentRef} className="content">
+            <div className="grid" />
 
-          <Rail
-            days={board.days}
-            startDate={board.startDate}
-            onAddDay={() => itinerary.updateBoard({ days: board.days + 1 })}
-          />
-
-          <LinkLayer
-            links={links}
-            rectFor={rectFor}
-            colorFor={colorFor}
-            selected={selectedLink}
-            onSelect={(id) => {
-              setSelectedLink(id)
-              setSelection([])
-            }}
-            onContext={openLinkMenu}
-            draft={draftLine}
-          />
-
-          {canvas.map((block) => {
-            const ref: Ref = { kind: 'canvas', id: block.id }
-            return (
-              <CanvasBlockView
-                key={block.id}
-                block={block}
-                selected={isSelected(ref)}
-                editing={editFieldFor(ref)}
-                targeted={isTargeted(ref)}
-                linking={!!draft}
-                onGrab={(e) => grabBlock(e, ref)}
-                onResize={(e, dir) => resizeCanvas(e, block.id, dir)}
-                onPort={(e) => startLink(e, ref)}
-                onContext={(e) => openBlockMenu(e, ref)}
-                onEdit={(field) => setEditing({ ref, field })}
-                onPatch={(patch) => itinerary.updateCanvas(block.id, patch)}
-                onEditDone={() => setEditing(null)}
-              />
-            )
-          })}
-
-          {timeline.map((block) => {
-            const ref: Ref = { kind: 'timeline', id: block.id }
-            return (
-              <TimelineBlockView
-                key={block.id}
-                block={block}
-                rect={timelineRect(block, lanes.get(block.id))}
-                selected={isSelected(ref)}
-                editing={editFieldFor(ref) === 'title'}
-                targeted={isTargeted(ref)}
-                linking={!!draft}
-                onGrab={(e) => grabBlock(e, ref)}
-                onResize={(e, edge) => resizeTimeline(e, block.id, edge)}
-                onPort={(e) => startLink(e, ref)}
-                onContext={(e) => openBlockMenu(e, ref)}
-                onEdit={() => setEditing({ ref, field: 'title' })}
-                onTitle={(title) => itinerary.updateTimeline(block.id, { title })}
-                onEditDone={() => setEditing(null)}
-              />
-            )
-          })}
-
-          {marquee && (
-            <div
-              className="marquee"
-              style={{
-                left: marquee.x,
-                top: marquee.y,
-                width: marquee.w,
-                height: marquee.h,
-                // The box rides inside the scaled content, so the border is
-                // divided back out to stay a hairline at any zoom.
-                borderWidth: 1 / viewport.scale,
-              }}
+            <Rail
+              days={board.days}
+              startDate={board.startDate}
+              onAddDay={() => itinerary.updateBoard({ days: board.days + 1 })}
             />
-          )}
+
+            <LinkLayer
+              links={links}
+              rectFor={rectFor}
+              colorFor={colorFor}
+              selected={selectedLink}
+              onSelect={(id) => {
+                setSelectedLink(id)
+                setSelection([])
+              }}
+              onContext={openLinkMenu}
+              draft={draftLine}
+            />
+
+            {canvas.map((block) => {
+              const ref: Ref = { kind: 'canvas', id: block.id }
+              return (
+                <CanvasBlockView
+                  key={block.id}
+                  block={block}
+                  selected={isSelected(ref)}
+                  editing={editFieldFor(ref)}
+                  targeted={isTargeted(ref)}
+                  linking={!!draft}
+                  onGrab={(e) => grabBlock(e, ref)}
+                  onResize={(e, dir) => resizeCanvas(e, block.id, dir)}
+                  onPort={(e) => startLink(e, ref)}
+                  onContext={(e) => openBlockMenu(e, ref)}
+                  onEdit={(field) => setEditing({ ref, field })}
+                  onPatch={(patch) => itinerary.updateCanvas(block.id, patch)}
+                  onEditDone={() => setEditing(null)}
+                />
+              )
+            })}
+
+            {timeline.map((block) => {
+              const ref: Ref = { kind: 'timeline', id: block.id }
+              return (
+                <TimelineBlockView
+                  key={block.id}
+                  block={block}
+                  rect={timelineRect(block, lanes.get(block.id))}
+                  selected={isSelected(ref)}
+                  editing={editFieldFor(ref) === 'title'}
+                  targeted={isTargeted(ref)}
+                  linking={!!draft}
+                  onGrab={(e) => grabBlock(e, ref)}
+                  onResize={(e, edge) => resizeTimeline(e, block.id, edge)}
+                  onPort={(e) => startLink(e, ref)}
+                  onContext={(e) => openBlockMenu(e, ref)}
+                  onEdit={() => setEditing({ ref, field: 'title' })}
+                  onTitle={(title) => itinerary.updateTimeline(block.id, { title })}
+                  onEditDone={() => setEditing(null)}
+                />
+              )
+            })}
+
+            {marquee && (
+              <div
+                className="marquee"
+                style={{
+                  left: marquee.x,
+                  top: marquee.y,
+                  width: marquee.w,
+                  height: marquee.h,
+                  // The box rides inside the scaled content, so the border is
+                  // divided back out to stay a hairline at any zoom.
+                  borderWidth: 1 / viewport.scale,
+                }}
+              />
+            )}
+          </div>
+
+          <div className="day-nav">
+            <button type="button" aria-label="Previous day" title="Previous day" onClick={() => goToDay(-1)}>
+              <IconArrowUp size={13} />
+            </button>
+            <button type="button" aria-label="Next day" title="Next day" onClick={() => goToDay(1)}>
+              <IconArrowDown size={13} />
+            </button>
+          </div>
+
+          <div className="hints">
+            <kbd>Scroll</kbd> pan · <kbd>⌘</kbd>+scroll zoom · <kbd>Space</kbd> drag ·{' '}
+            <kbd>⌘</kbd>+click or drag multi-select · <kbd>Right-click</kbd> menu ·{' '}
+            <kbd>Double-click</kbd> new block
+          </div>
         </div>
 
-        <div className="day-nav">
-          <button type="button" aria-label="Previous day" title="Previous day" onClick={() => goToDay(-1)}>
-            <IconArrowUp size={13} />
-          </button>
-          <button type="button" aria-label="Next day" title="Next day" onClick={() => goToDay(1)}>
-            <IconArrowDown size={13} />
-          </button>
-        </div>
+        <div
+          className="split"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the map"
+          onPointerDown={startSplit}
+        />
 
-        <div className="hints">
-          <kbd>Scroll</kbd> pan · <kbd>⌘</kbd>+scroll zoom · <kbd>Space</kbd> drag ·{' '}
-          <kbd>⌘</kbd>+click or drag multi-select · <kbd>Right-click</kbd> menu ·{' '}
-          <kbd>Double-click</kbd> new block
-        </div>
+        <MapPane view={mapView()} width={paneW} theme={theme.resolved} focus={mapFocus} />
       </div>
 
       {menu && (

@@ -116,6 +116,13 @@ export const IconAuto = ({ size = 14 }: Props) => (
   </svg>
 )
 
+export const IconPin = ({ size = 14 }: Props) => (
+  <svg {...base(size)}>
+    <path d="M8 14.2s4.6-4.4 4.6-7.7a4.6 4.6 0 1 0-9.2 0c0 3.3 4.6 7.7 4.6 7.7Z" />
+    <circle cx="8" cy="6.4" r="1.7" />
+  </svg>
+)
+
 export const IconTarget = ({ size = 14 }: Props) => (
   <svg {...base(size)}>
     <circle cx="8" cy="8" r="5.5" />

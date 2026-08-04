@@ -121,6 +121,19 @@ kbd {
   height: 100%;
 }
 
+/* The board on the left, the map preview on the right, a draggable hairline
+   between them. */
+.stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.app[data-splitting] {
+  cursor: col-resize;
+  user-select: none;
+}
+
 /* --------------------------------------------------------------- toolbar -- */
 
 .toolbar {
@@ -444,6 +457,7 @@ kbd {
 .viewport {
   position: relative;
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   background: var(--bg);
   touch-action: none;
@@ -547,6 +561,208 @@ kbd {
   backdrop-filter: blur(6px);
   pointer-events: none;
   user-select: none;
+}
+
+/* -------------------------------------------------------------- map pane -- */
+
+.split {
+  position: relative;
+  flex: none;
+  width: 1px;
+  background: var(--line);
+  cursor: col-resize;
+  transition: background-color var(--dur) var(--ease);
+}
+
+/* A hairline is too thin to grab, so the hit area is widened over both sides. */
+.split::after {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+}
+
+.split:hover,
+.app[data-splitting] .split {
+  background: var(--accent);
+}
+
+.map-pane {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-width: 0;
+  background: var(--surface);
+}
+
+.map-head {
+  flex: none;
+  padding: 10px 12px 8px;
+  min-width: 0;
+}
+
+.map-title,
+.map-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-title {
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+}
+
+.map-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.map-fields {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 12px 10px;
+}
+
+.map-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 27px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  transition: border-color var(--dur) var(--ease);
+}
+
+.map-field:hover {
+  border-color: var(--line-2);
+}
+
+.map-field:focus-within {
+  border-color: var(--accent);
+}
+
+.map-field > span {
+  flex: none;
+  width: 50px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.map-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font-size: 12px;
+}
+
+.map-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.map-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* A gesture that starts on the board shouldn't be answered by the map when it
+   crosses the divider. */
+.app[data-busy] .map-canvas {
+  pointer-events: none;
+}
+
+.map-note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 22px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.map-note p {
+  margin: 0;
+}
+
+.map-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  max-width: min(300px, calc(100% - 24px));
+  padding: 5px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+  text-wrap: pretty;
+  color: var(--text-2);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+.map-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.map-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  align-self: flex-start;
+  max-width: calc(100% - 24px);
+  margin: 8px 12px 10px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+  text-decoration: none;
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    background-color var(--dur) var(--ease);
+}
+
+.map-open span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-open svg {
+  flex: none;
+  color: var(--text-3);
+}
+
+.map-open:hover {
+  color: var(--text);
+  border-color: var(--line-2);
+  background: var(--hover);
 }
 
 /* ------------------------------------------------------------------ rail -- */
@@ -762,6 +978,25 @@ kbd {
 }
 
 .tblock[data-compact] .tblock-title {
+  white-space: nowrap;
+}
+
+.tblock-place {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.tblock-place svg {
+  flex: none;
+}
+
+.tblock-place span {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

@@ -1,6 +1,7 @@
 import { formatDuration, formatTime } from '../lib/time'
 import type { Rect, TimelineBlock } from '../lib/types'
 import { Editable } from './Editable'
+import { IconPin } from './icons'
 import { LinkPort } from './LinkPort'
 
 export type ResizeEdge = 'top' | 'bottom'
@@ -75,6 +76,16 @@ export function TimelineBlockView({
           onCommit={onTitle}
           onDone={onEditDone}
         />
+        {/* A short block has no room for a third line, and clipping the title
+            to fit the pin reads worse than leaving the location to the pane. */}
+        {/* What the location resolved to, never the raw link that was pasted.
+            An unresolved block simply shows nothing yet. */}
+        {!compact && block.placeLabel && (
+          <div className="tblock-place">
+            <IconPin size={10} />
+            <span>{block.placeLabel}</span>
+          </div>
+        )}
       </div>
 
       <div className="resize resize-top" onPointerDown={(e) => onResize(e, 'top')} />
