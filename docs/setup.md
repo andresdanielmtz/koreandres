@@ -180,30 +180,36 @@ Google moved styling to the Cloud console, and the Map ID is how a map picks up
 the style attached to it. So there is no library to add and no code to write —
 the style lives in your Google account, and the app just names it.
 
-Without either variable the app uses Google's `DEMO_MAP_ID`: it works, needs no
-setup, and looks like plain Google Maps.
+Unset, the app uses Google's `DEMO_MAP_ID` — works, no setup, looks like plain
+Google Maps.
 
-**Making your own.** Under **Google Maps Platform → Map Management → Create Map
-ID**: map type JavaScript, rendering Vector. Do it twice if you want a styled
-dark mode, once for each. Set only `VITE_GOOGLE_MAPS_MAP_ID` and it is used for
-both themes.
+### Setting one up
 
-**Styling it.** Go to **Map Styles → Create Map Style → Import JSON**, and
-paste one of:
+1. **Map Management → Create Map ID**: type JavaScript, rendering Vector.
+2. **Map Styles → Create Map Style → Import JSON**:
+   [`light.json`](map-styles/light.json).
+3. Switch the editor's **light/dark toggle to dark**, import
+   [`dark.json`](map-styles/dark.json) into that variant.
+4. Associate the style with the Map ID — a separate step, on the style's page.
+5. Put step 1's ID in `VITE_GOOGLE_MAPS_MAP_ID`.
 
-- [`docs/map-styles/light.json`](map-styles/light.json)
-- [`docs/map-styles/dark.json`](map-styles/dark.json)
+[map-styles/README.md](map-styles/README.md) covers what the styles keep and
+why. Edit them in the console's visual editor rather than by hand; changes take
+minutes to propagate and browsers cache them hard, so hard-reload before
+deciding a tweak didn't land.
 
-They're tuned to this app: flat greys from the same palette as the interface,
-business and government pins dropped, road and transit icons off, parks and
-water left in as the two things you actually navigate by. Then associate each
-style with its Map ID, which is the last step on the style's page.
+### Two ways this goes wrong
 
-The console has a visual editor on top of the imported JSON, so treat these as
-a starting point rather than something to edit by hand. Changes take a few
-minutes to reach the map, and the browser caches hard — hard-reload before
-concluding a tweak didn't work.
+**A Style ID in `VITE_GOOGLE_MAPS_MAP_ID`.** Map IDs and styles are different
+objects with different IDs, and only the Map ID works here. A style's ID
+resolves to nothing: default map, no error in the interface, and — since the
+fallback is raster — a camera that steps between zoom levels instead of
+gliding. That last symptom is the fastest way to spot it.
 
-If you set a style, drop `colorScheme` from your thinking: a styled map uses
-its style, not the light/dark switch, which is why there are two Map IDs
-rather than one.
+**A dark theme that looks neither styled nor dark.** Light and dark are two
+*variants of one style*, so there is no separate dark style ID; one Map ID
+covers both, and the app selects the variant by passing `colorScheme`. Either
+the style has no dark variant yet (step 3), or
+`VITE_GOOGLE_MAPS_MAP_ID_DARK` is set — which tells the app themes live in
+separate Map IDs and stops it sending `colorScheme` at all. Leave that variable
+empty unless you genuinely have two styled Map IDs.
