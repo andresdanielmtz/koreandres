@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   CANVAS_MIN_H,
   CANVAS_MIN_W,
+  DAY_STRIDE,
   GUTTER_W,
   LANE_W,
   LANE_X,
@@ -10,8 +11,8 @@ import {
   MIN_PER_DAY,
   PX_PER_MIN,
 } from '../lib/constants'
-import { canvasRect, packLanes, timelineRect } from '../lib/geometry'
-import { clamp, formatTime, snap, timeToY, yToTime } from '../lib/time'
+import { boardBounds, canvasRect, packLanes, timelineRect } from '../lib/geometry'
+import { clamp, dayTop, formatTime, snap, timeToY, yToTime } from '../lib/time'
 import type { CanvasBlock, ColorName, Ref, Rect, Snapshot } from '../lib/types'
 import type { Itinerary } from '../state/useItinerary'
 import { useTheme } from '../state/useTheme'
@@ -22,12 +23,25 @@ import { LinkLayer, type Draft } from './LinkLayer'
 import { Rail } from './Rail'
 import { Toolbar } from './Toolbar'
 import { TimelineBlockView, type ResizeEdge } from './TimelineBlockView'
-import { IconCopy, IconLink, IconNote, IconPlus, IconRoute, IconTarget, IconTrash } from './icons'
+import {
+  IconArrowDown,
+  IconArrowUp,
+  IconCopy,
+  IconLink,
+  IconNote,
+  IconPlus,
+  IconRoute,
+  IconTarget,
+  IconTrash,
+} from './icons'
 
 type EditField = 'title' | 'body' | 'url'
 type Editing = { ref: Ref; field: EditField }
 type Menu = { x: number; y: number; entries: MenuEntry[] }
 type DraftState = { source: Ref; board: { x: number; y: number }; client: { x: number; y: number }; target: Ref | null }
+
+/** Where a day boundary is parked, in pixels down from the top of the viewport. */
+const DAY_ANCHOR_Y = 88
 
 const isEditable = (el: EventTarget | null) => {
   const node = el as HTMLElement | null
@@ -35,9 +49,10 @@ const isEditable = (el: EventTarget | null) => {
 }
 
 export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot: Snapshot }) {
+  const { board, timeline, canvas, links } = snapshot
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const viewport = useViewport(viewportRef, contentRef)
+  const viewport = useViewport(viewportRef, contentRef, boardBounds(board.days, canvas))
   const theme = useTheme()
 
   const [selection, setSelection] = useState<Ref | null>(null)
@@ -47,7 +62,6 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
   const [draft, setDraft] = useState<DraftState | null>(null)
   const [dragging, setDragging] = useState(false)
 
-  const { board, timeline, canvas, links } = snapshot
   const lanes = packLanes(timeline)
 
   const rectFor = (ref: Ref): Rect | null => {
@@ -426,6 +440,22 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     })
   }
 
+  /* ------------------------------------------------------------------ days -- */
+
+  /**
+   * Step the view to the previous / next day. The current day is read back out
+   * of the transform rather than tracked, so it stays honest after a free pan —
+   * and stepping up from mid-day lands on the top of the day you are already on.
+   */
+  function goToDay(step: -1 | 1) {
+    const v = viewport.getView()
+    const anchored = (DAY_ANCHOR_Y - v.y) / v.scale
+    const raw = anchored / DAY_STRIDE
+    const current = Math.floor(raw)
+    const next = step > 0 ? current + 1 : raw - current > 0.01 ? current : current - 1
+    viewport.panBy(0, (anchored - dayTop(clamp(next, 0, board.days - 1))) * v.scale)
+  }
+
   /* ------------------------------------------------------------ background -- */
 
   function onBackgroundDown(e: React.PointerEvent) {
@@ -446,7 +476,9 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
 
   function onBackgroundDoubleClick(e: React.MouseEvent) {
     const el = e.target as HTMLElement
-    if (el.closest('[data-ref]')) return
+    // Controls sitting over the board get double-clicked too — twice on "next
+    // day" shouldn't also drop a block behind it.
+    if (el.closest('[data-ref]') || el.closest('button') || el.closest('a')) return
     const at = viewport.toBoard(e.clientX, e.clientY)
     const onRail = at.x > -GUTTER_W && at.x < LANE_X + LANE_W + 24
 
@@ -634,6 +666,15 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
               />
             )
           })}
+        </div>
+
+        <div className="day-nav">
+          <button type="button" aria-label="Previous day" title="Previous day" onClick={() => goToDay(-1)}>
+            <IconArrowUp size={13} />
+          </button>
+          <button type="button" aria-label="Next day" title="Next day" onClick={() => goToDay(1)}>
+            <IconArrowDown size={13} />
+          </button>
         </div>
 
         <div className="hints">

@@ -27,6 +27,14 @@ export const GUTTER_W = 46
 /** Date headers are right-aligned to this board-space x. */
 export const DATE_RIGHT = -(GUTTER_W + 26)
 
+/** How far the rail's rules and night shading reach either side of the spine. */
+export const RAIL_LEFT = -330
+export const RAIL_RIGHT = LANE_X + LANE_W + 640
+/** Room kept below the last day for the "Add day" button. */
+export const RAIL_FOOT = 64
+/** Empty space left around the content before a pan is stopped. */
+export const PAN_MARGIN = 320
+
 export const CANVAS_MIN_W = 140
 export const CANVAS_MIN_H = 72
 export const CANVAS_DEFAULT_W = 240

@@ -37,6 +37,14 @@ state exists so the toolbar can print "100%", and for nothing else.
 When you need to go the other way, from a mouse position to a board position,
 use `toBoard(clientX, clientY)`.
 
+Panning is bounded. `boardBounds` in `geometry.ts` returns the box the board
+actually occupies — the rail's full height plus every loose canvas card, padded
+by `PAN_MARGIN` — and every view change runs through a clamp that keeps that box
+covering the viewport, so you can't drift off into empty space. Content smaller
+than the viewport on an axis gets centred on it instead of pinned to one edge.
+The bounds are recomputed each render and re-clamped in a layout effect, which
+is what pulls the view back in when a day is removed under it.
+
 ## Days as numbers, not dates
 
 A timeline block stores a day number and two minute counts, not timestamps.

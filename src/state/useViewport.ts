@@ -1,12 +1,24 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { MAX_ZOOM, MIN_ZOOM } from '../lib/constants'
 import { clamp } from '../lib/time'
+import type { Bounds } from '../lib/types'
 
 export type View = { x: number; y: number; scale: number }
 export type Point = { x: number; y: number }
 
 /** Opens on 08:00 of day one rather than at midnight. */
 const INITIAL: View = { x: 320, y: -392, scale: 1 }
+
+/**
+ * One axis of the pan clamp. `lo`/`hi` are the offsets at which the content's
+ * far and near edges meet the viewport; when the content is the smaller of the
+ * two the range inverts, and it gets centred instead.
+ */
+function containAxis(offset: number, min: number, max: number, size: number, scale: number) {
+  const lo = size - max * scale
+  const hi = -min * scale
+  return lo > hi ? (lo + hi) / 2 : clamp(offset, lo, hi)
+}
 
 /**
  * Pan/zoom for the board. The transform is written straight to the DOM on
@@ -16,8 +28,12 @@ const INITIAL: View = { x: 320, y: -392, scale: 1 }
 export function useViewport(
   viewportRef: React.RefObject<HTMLElement | null>,
   contentRef: React.RefObject<HTMLElement | null>,
+  bounds: Bounds,
 ) {
   const viewRef = useRef<View>(INITIAL)
+  // Read inside pointer handlers, which outlive the render that started them.
+  const boundsRef = useRef(bounds)
+  const downRef = useRef(false)
   const [scale, setScale] = useState(INITIAL.scale)
   const [panning, setPanning] = useState(false)
   const spaceRef = useRef(false)
@@ -30,8 +46,20 @@ export function useViewport(
     if (el) el.style.transform = `translate3d(${v.x}px, ${v.y}px, 0) scale(${v.scale})`
   }
 
+  /** Stops a pan once the padded content box no longer covers the viewport. */
+  function contain(v: View): View {
+    const rect = viewportRef.current?.getBoundingClientRect()
+    if (!rect) return v
+    const b = boundsRef.current
+    return {
+      scale: v.scale,
+      x: containAxis(v.x, b.minX, b.maxX, rect.width, v.scale),
+      y: containAxis(v.y, b.minY, b.maxY, rect.height, v.scale),
+    }
+  }
+
   function apply(next: View) {
-    viewRef.current = next
+    viewRef.current = contain(next)
     paint()
     if (!syncing.current) {
       syncing.current = requestAnimationFrame(() => {
@@ -41,9 +69,33 @@ export function useViewport(
     }
   }
 
-  // Paint the initial transform once; refs are stable for the app's lifetime.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useLayoutEffect(paint, [])
+  // Paints the initial transform, and pulls the view back in when the content
+  // shrinks under it — removing a day can leave you looking at nothing. Never
+  // while the pointer is down: a card dragged back from the far edge shrinks
+  // the bounds as it moves, and correcting the view then would slide the board
+  // out from under the card.
+  useLayoutEffect(() => {
+    boundsRef.current = bounds
+    if (!downRef.current) apply(viewRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY])
+
+  useEffect(() => {
+    const down = () => (downRef.current = true)
+    const up = () => (downRef.current = false)
+    const onResize = () => apply(viewRef.current)
+    window.addEventListener('pointerdown', down, true)
+    window.addEventListener('pointerup', up, true)
+    window.addEventListener('pointercancel', up, true)
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('pointerup', up, true)
+      window.removeEventListener('pointercancel', up, true)
+      window.removeEventListener('resize', onResize)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /** Client coordinates → board coordinates. */
   function toBoard(clientX: number, clientY: number): Point {
