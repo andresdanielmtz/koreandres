@@ -93,6 +93,22 @@ references auth.users` column to `boards`, and rewrite the policies to check
 that their board belongs to you. That's a real piece of work rather than a
 config change, which is why it isn't done here.
 
+## Filling a board
+
+Two optional files, run in order in the same SQL editor, put ten days in Korea
+onto the oldest board in the project:
+
+| File | What it does |
+| --- | --- |
+| [`seed-korea.sql`](../supabase/seed-korea.sql) | The itinerary — events, the commutes between them, the meals and gaps as trivia blocks, six reference cards |
+| [`seed-korea-detail.sql`](../supabase/seed-korea-detail.sql) | Rebuilds day 0 around a 19:00 landing and a house in Gangbuk-gu, points the first and last trips of each day at it, and adds seventeen more cards |
+
+Both **add** rather than replace, so running one twice gives you two of
+everything; the deletes are at the top of each, commented out. The second one
+deletes day 0 outright before rebuilding it. Locations are seeded as text only
+— the first time you open the board each one is geocoded and the answer saved,
+so the coordinates come from Google rather than from a guess in a file.
+
 ## Starting over
 
 If you want to wipe everything and begin again:
