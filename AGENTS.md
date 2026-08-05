@@ -134,6 +134,12 @@ pane shows is derived from `selection` by `mapView()`. A commute block draws a
 flown — to the route's bounds — rather than let the renderer cut to them
 (`preserveViewport: true`, and don't remove it). Routes are cached per session
 on both ends plus the mode, and a failure is cached as its reason.
+**Google routes nothing but transit inside South Korea** — walking, driving and
+cycling answer `ZERO_RESULTS` for any two points in the country, which is a
+mapping export restriction rather than a gap, so there is nothing to retry and
+no key that fixes it. Those three fall back to `lib/estimate.ts`: straight-line
+distance times `TRAVEL_DETOUR` at `TRAVEL_SPEED_KMH`, drawn as a dashed
+polyline and printed with a `≈`. Don't present that number as a route.
 `lib/maps.ts` reads `VITE_GOOGLE_MAPS_API_KEY` (needs Maps JavaScript API,
 Geocoding API **and** Directions API) and the two `VITE_GOOGLE_MAPS_MAP_ID*` vars; running with no key is a supported
 state, so don't make the pane assume one. The map's appearance lives in the

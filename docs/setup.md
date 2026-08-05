@@ -137,7 +137,11 @@ a project, then under **APIs & Services → Library**, enable three things:
   fly to. It also returns how big the place is, which is how the map knows to
   stop closer for a building than for a city.
 - **Directions API**, which works out the route a commute block draws between
-  two places, and how long it takes.
+  two places, and how long it takes. **In South Korea it only answers for
+  transit** — walking, driving and cycling come back empty between any two
+  points, whatever key you use, because Korean mapping data can't leave the
+  country and Google has no road network to route over. Those three modes fall
+  back to a distance-based estimate, marked with a `≈`.
 
 Then **APIs & Services → Credentials → Create credentials → API key**.
 

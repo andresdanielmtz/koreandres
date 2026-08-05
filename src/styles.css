@@ -714,6 +714,13 @@ kbd {
   color: var(--text-3);
 }
 
+/* A time worked out from the distance rather than routed. It sits where the
+   real one would, so it says so in its weight as well as in its ≈. */
+.map-route[data-estimate] strong {
+  font-weight: 500;
+  color: var(--text-2);
+}
+
 .map-frame {
   position: relative;
   flex: 1;

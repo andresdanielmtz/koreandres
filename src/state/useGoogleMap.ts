@@ -21,6 +21,7 @@ import {
   usesColorScheme,
   zoomForBounds,
 } from '../lib/maps'
+import { estimateTrip, type TripEstimate } from '../lib/estimate'
 import { clamp } from '../lib/time'
 import type { TravelMode } from '../lib/types'
 
@@ -74,6 +75,9 @@ export type MapPlace = {
 
 /** Where the camera should end up: a point, and how close to stand to it. */
 type Camera = { center: google.maps.LatLngLiteral; zoom: number }
+
+/** The two ends of a trip, once both are points. */
+type Ends = [google.maps.LatLngLiteral, google.maps.LatLngLiteral]
 
 const HOME: Camera = { center: MAP_DEFAULT_CENTER, zoom: MAP_DEFAULT_ZOOM }
 
@@ -131,6 +135,8 @@ export function useGoogleMap(
   const directionsRef = useRef<google.maps.DirectionsService | null>(null)
   const rendererRef = useRef<google.maps.DirectionsRenderer | null>(null)
   const routeCache = useRef(new Map<string, google.maps.DirectionsResult | RouteError>())
+  /** The straight line stood in for a route Google won't work out. */
+  const directRef = useRef<google.maps.Polyline | null>(null)
 
   /* Read after an await, where the render that started it is long gone. */
   const resolvedRef = useRef(place.onResolved)
@@ -152,6 +158,9 @@ export function useGoogleMap(
     info: RouteInfo | null
     error: RouteError | null
   } | null>(null)
+  /** What the trip works out at when the router has no route to give — read
+   *  back through the current question, exactly like `answer` above. */
+  const [guess, setGuess] = useState<{ key: string; trip: TripEstimate } | null>(null)
 
   /** Ask Google what is at a point, for something to call it. */
   async function describe(point: google.maps.LatLngLiteral): Promise<string> {
@@ -337,6 +346,62 @@ export function useGoogleMap(
     renderer.setDirections(result)
   }
 
+  /** Both ends as points, so a trip the router refused can still be worked out
+   *  from the distance. Either end that can't be found means no estimate —
+   *  half a line is worse than none. */
+  async function guessTrip(want: MapRoute) {
+    const [from, to] = await Promise.all([resolve(want.from), resolve(want.to)])
+    if (!from || !to) return null
+    const trip = estimateTrip(from, to, want.mode)
+    return trip ? { trip, ends: [from, to] as Ends } : null
+  }
+
+  /**
+   * Stand a straight line in for a route that doesn't exist, so a walk still
+   * shows which way it goes and roughly how far. Dashed, and in the muted ink
+   * rather than the accent the real route uses, because it is a distance
+   * rather than a way anyone can take.
+   */
+  function showDirect(ends: Ends | null) {
+    const map = mapRef.current
+    if (!map) return
+    if (!ends) {
+      directRef.current?.setMap(null)
+      return
+    }
+    const line = (directRef.current ??= new google.maps.Polyline({
+      // A dashed line is a transparent stroke wearing repeated symbols; the
+      // symbols take their colour from the polyline.
+      strokeOpacity: 0,
+      strokeColor: cssColor('--text-3', '#6b7280'),
+      icons: [
+        {
+          icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.8, scale: 3 },
+          offset: '0',
+          repeat: '11px',
+        },
+      ],
+    }))
+    line.setPath([...ends])
+    line.setMap(map)
+  }
+
+  /** Fly to what a pair of ends spans — the same arrival a real route gets. */
+  function flyToSpan(ends: Ends) {
+    const el = containerRef.current
+    if (!el) return
+    const bounds = new google.maps.LatLngBounds()
+    for (const end of ends) bounds.extend(end)
+    flyTo({
+      center: bounds.getCenter().toJSON(),
+      zoom: clamp(
+        zoomForBounds(bounds, el.clientWidth, el.clientHeight) - MAP_ROUTE_BACKOFF,
+        MAP_MIN_ZOOM,
+        MAP_MAX_ZOOM,
+      ),
+    })
+  }
+
   function showMarker(at: google.maps.LatLngLiteral | null) {
     const map = mapRef.current
     const marker = markerRef.current
@@ -381,6 +446,7 @@ export function useGoogleMap(
         // the line colour for the new theme.
         markerRef.current = null
         rendererRef.current = null
+        directRef.current = null
         const map = new google.maps.Map(el, {
           ...from,
           mapId: mapIdFor(theme),
@@ -449,6 +515,7 @@ export function useGoogleMap(
     if (place.hold) {
       showMarker(null)
       showRoute(null)
+      showDirect(null)
       return
     }
 
@@ -460,12 +527,26 @@ export function useGoogleMap(
         if (cancelled) return
         if (typeof result === 'string') {
           showRoute(null)
+          showDirect(null)
           setAnswer({ key, info: null, error: result })
+          // No route is not the same as nothing to say. Inside Korea it is the
+          // answer for every mode except transit — Google has no road network
+          // there to route over — so the trip is worked out from the distance
+          // instead, and the two ends are joined by a straight line.
+          if (result === 'none') {
+            void guessTrip(want).then((found) => {
+              if (cancelled || !found) return
+              setGuess({ key, trip: found.trip })
+              showDirect(found.ends)
+              flyToSpan(found.ends)
+            })
+          }
           return
         }
         const best = result.routes[0]
         const leg = best.legs[0]
         showRoute(result)
+        showDirect(null)
         setAnswer({
           key,
           info: {
@@ -494,10 +575,11 @@ export function useGoogleMap(
       }
     }
 
-    // Not a commute any more: the line goes with it. The answer above is left
-    // alone — it is read back through the current question, so it is already
-    // out of the picture.
+    // Not a commute any more: both lines go with it. The answers above are
+    // left alone — they are read back through the current question, so they
+    // are already out of the picture.
     showRoute(null)
+    showDirect(null)
 
     // Already resolved and saved: no lookup, just go.
     if (place.lat != null && place.lng != null) {
@@ -547,6 +629,13 @@ export function useGoogleMap(
   // Likewise: the router's answer counts only while it answers what is being
   // asked now. Anything else is a leftover from the last selection.
   const current = answer?.key === routeKey(place.route) ? answer : null
+  const estimated = guess?.key === routeKey(place.route) ? guess.trip : null
 
-  return { status, missing, route: current?.info ?? null, routeError: current?.error ?? null }
+  return {
+    status,
+    missing,
+    route: current?.info ?? null,
+    routeError: current?.error ?? null,
+    estimate: estimated,
+  }
 }

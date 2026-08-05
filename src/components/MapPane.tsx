@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { TRAVEL_MODE_LABEL, TRAVEL_MODES } from '../lib/constants'
+import { TRAVEL_MODE_LABEL, TRAVEL_MODES, TRAVEL_SPEED_KMH } from '../lib/constants'
+import { formatMetres } from '../lib/estimate'
 import { isShortMapsUrl, MAPS_KEY_VAR, mapsSearchUrl } from '../lib/maps'
+import { formatDuration } from '../lib/time'
 import type { TravelMode } from '../lib/types'
 import { useGoogleMap, type MapRoute, type ResolvedPlace } from '../state/useGoogleMap'
 import { IconExternal, IconPin, IconRoute } from './icons'
@@ -63,7 +65,7 @@ type Props = {
 
 export function MapPane({ view, width, theme, focus }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
-  const { status, missing, route, routeError } = useGoogleMap(
+  const { status, missing, route, routeError, estimate } = useGoogleMap(
     canvasRef,
     {
       key: view.id,
@@ -138,6 +140,16 @@ export function MapPane({ view, width, theme, focus }: Props) {
               {route.via && <span className="map-via">{route.via}</span>}
             </div>
           )}
+
+          {/* Google routes nothing but transit in Korea, so the other three
+              answer with a sum over the distance. Marked as one. */}
+          {!route && estimate && (
+            <div className="map-route" data-estimate="">
+              <IconRoute size={11} />
+              <strong>≈ {formatDuration(estimate.minutes)}</strong>
+              <span>{formatMetres(estimate.metres)} in a straight line</span>
+            </div>
+          )}
         </div>
       ) : (
         view.onPlace &&
@@ -199,10 +211,25 @@ export function MapPane({ view, width, theme, focus }: Props) {
           </div>
         )}
 
+        {/* In Korea this is the answer for everything except transit: Google
+            has no road network for the country, so there is no route to be
+            had and nothing to retry. The dashed line and the estimate above
+            are what stands in for it. */}
         {status === 'ready' && routeError === 'none' && (
           <div className="map-toast">
-            No {TRAVEL_MODE_LABEL[view.commute?.mode ?? 'transit'].toLowerCase()} route between
-            these two — try another way of getting there.
+            {estimate ? (
+              <>
+                Google has no {TRAVEL_MODE_LABEL[view.commute?.mode ?? 'walking'].toLowerCase()}{' '}
+                routes in South Korea — only transit. The time above is worked out from the
+                distance, at{' '}
+                {TRAVEL_SPEED_KMH[view.commute?.mode ?? 'walking'] ?? 0} km/h.
+              </>
+            ) : (
+              <>
+                No {TRAVEL_MODE_LABEL[view.commute?.mode ?? 'transit'].toLowerCase()} route
+                between these two — try another way of getting there.
+              </>
+            )}
           </div>
         )}
 

@@ -122,6 +122,20 @@ export const TRAVEL_MODE_LABEL: Record<TravelMode, string> = {
   bicycling: 'Bike',
 }
 
+/** Speeds behind the fallback in `lib/estimate.ts`, in km/h: a brisk city walk,
+ *  a shared bike, and a car in Seoul traffic rather than on an open road.
+ *  Transit is absent on purpose — it is the one mode Google routes in Korea,
+ *  and a timetable is not a distance divided by a speed. */
+export const TRAVEL_SPEED_KMH: Partial<Record<TravelMode, number>> = {
+  walking: 4.8,
+  bicycling: 14,
+  driving: 21,
+}
+
+/** How much further a real route runs than the straight line under it. River
+ *  crossings and a grid that doesn't oblige make this generous. */
+export const TRAVEL_DETOUR = 1.35
+
 export const COLOR_LABEL: Record<ColorName, string> = {
   blue: 'Blue',
   green: 'Green',

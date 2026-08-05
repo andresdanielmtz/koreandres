@@ -229,6 +229,31 @@ the SDK once, pulling a place out of a Google Maps URL, and the mercator sum
 behind `zoomForBounds`. With no key it rejects, and the pane says which
 variable is missing instead of showing a broken map.
 
+## When there is no route
+
+Google will not route a car, a bike or a pair of feet anywhere in South Korea.
+Every such request comes back `ZERO_RESULTS`; only transit answers. It is an
+export restriction on Korean mapping data rather than a hole in the coverage,
+which means no key, no billing account and no parameter changes it, and there
+is no point retrying.
+
+| Mode | Inside Korea |
+| --- | --- |
+| transit | routed normally, with the lines it takes |
+| walking, driving, bicycling | `ZERO_RESULTS`, always |
+
+Saying nothing there is the wrong answer to "should I walk or get a taxi", so
+those three fall back to `lib/estimate.ts`. It takes the straight line between
+the two ends, multiplies it by `TRAVEL_DETOUR` for the wandering a real route
+does, and divides by a speed per mode from `TRAVEL_SPEED_KMH`. The map draws
+the same straight line, dashed and in the muted ink rather than the accent the
+real route uses, and the pane prints the time with a `≈` in a lighter weight
+than a routed one. Three ways of saying the same thing: this is arithmetic, not
+directions.
+
+Kakao and Naver do route cars in Korea, and both want a server-side key, which
+is the one thing this app hasn't got.
+
 ## Saving
 
 `lib/store.ts` puts Supabase and local storage behind the same interface, and
