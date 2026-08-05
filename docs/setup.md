@@ -143,17 +143,24 @@ a project, then under **APIs & Services → Library**, enable three things:
   country and Google has no road network to route over. Those three modes fall
   back to a distance-based estimate, marked with a `≈`.
 
+- **Places API (New)**, which finds the restaurants around a block when you
+  right-click it. Note the *(New)* — the old Places API is a different entry in
+  the library and the app doesn't use it.
+
 Then **APIs & Services → Credentials → Create credentials → API key**.
 
 Enabling only the first is the mistake to watch for: the map draws, every
 location fails to resolve, and the pane just says it couldn't find the place.
-Skipping the third is the same story one level down — everything works until
-you select a commute block, which then says the Directions API isn't enabled.
+Skipping the third or fourth is the same story one level down — everything
+works until you select a commute block, or ask what is nearby, and the pane
+says which API isn't enabled.
 
 You'll be asked to attach a billing account — Google asks for one across Maps
-Platform. All three have a free monthly allowance that a trip board will not
-come close to, and both geocodes and routes are cached for the session, so
-re-selecting a block you've already looked at costs nothing.
+Platform. All four have a free monthly allowance that a trip board will not
+come close to, and geocodes, routes and nearby searches are all cached for the
+session, so re-selecting a block you've already looked at costs nothing.
+Nearby search is the priciest of the four per call, which is why dragging the
+radius slider waits for you to stop before it asks.
 
 ## 2. Put it in `.env`
 
@@ -176,8 +183,8 @@ the protection. On the key's page in Credentials:
 
 - **Application restrictions → Websites**, listing the origins you serve from
   (`http://localhost:5173` for development, plus wherever you deploy).
-- **API restrictions → Restrict key →** Maps JavaScript API, Geocoding API and
-  Directions API.
+- **API restrictions → Restrict key →** Maps JavaScript API, Geocoding API,
+  Directions API and Places API (New).
 
 ## 4. Optionally, a Map ID — and a style
 

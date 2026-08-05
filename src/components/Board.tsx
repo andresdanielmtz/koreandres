@@ -13,6 +13,9 @@ import {
   MAP_PANE_MIN,
   MIN_DURATION,
   MIN_PER_DAY,
+  NEARBY_RADIUS_DEFAULT,
+  NEARBY_RADIUS_MAX,
+  NEARBY_RADIUS_MIN,
   PX_PER_MIN,
 } from '../lib/constants'
 import { commuteEnds, commuteTitle, routable, type CommuteEnds } from '../lib/commute'
@@ -43,6 +46,7 @@ import {
   IconArrowUp,
   IconCopy,
   IconCup,
+  IconFork,
   IconLink,
   IconNote,
   IconPin,
@@ -62,6 +66,19 @@ const DAY_ANCHOR_Y = 88
 
 /** Width of the map pane, remembered per browser. */
 const PANE_KEY = 'itinerary.mapPane'
+
+/** How far the nearby search looks. Remembered too — it is a preference about
+ *  how far you will walk, not about one block. */
+const NEARBY_KEY = 'itinerary.nearbyRadius'
+
+function readNearbyRadius(): number {
+  const saved = Number(localStorage.getItem(NEARBY_KEY))
+  return clamp(
+    Number.isFinite(saved) && saved > 0 ? saved : NEARBY_RADIUS_DEFAULT,
+    NEARBY_RADIUS_MIN,
+    NEARBY_RADIUS_MAX,
+  )
+}
 
 const clampPane = (w: number) =>
   clamp(w, MAP_PANE_MIN, Math.max(MAP_PANE_MIN, window.innerWidth * MAP_PANE_MAX_RATIO))
@@ -93,6 +110,9 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
   const [paneW, setPaneW] = useState(readPaneWidth)
   const [splitting, setSplitting] = useState(false)
   const [mapFocus, setMapFocus] = useState<{ field: MapField } | null>(null)
+  /** Which block is being asked what is around it, and how far around. */
+  const [nearbyFor, setNearbyFor] = useState<string | null>(null)
+  const [nearbyRadius, setNearbyRadius] = useState(readNearbyRadius)
 
   const lanes = packLanes(timeline)
 
@@ -367,6 +387,9 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     const timelineBlock = ref.kind === 'timeline' ? timeline.find((b) => b.id === ref.id) : null
     const commute = timelineBlock?.kind === 'commute'
     const trivia = timelineBlock?.kind === 'trivia'
+    const located =
+      timelineBlock?.kind === 'event' &&
+      !!(timelineBlock.place.trim() || placeFromUrl(timelineBlock.url))
     const kindLabel =
       ref.kind === 'canvas'
         ? canvasBlock?.kind === 'travel'
@@ -417,6 +440,18 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
                 onSelect: () => setEditing({ ref, field: 'url' }),
               },
             ]),
+      // Only an event has a single point for a circle to go round, and only
+      // one that has said where it is.
+      ...(located
+        ? [
+            {
+              kind: 'item' as const,
+              label: nearbyFor === ref.id ? 'Hide restaurants' : 'Nearby restaurants',
+              icon: <IconFork size={13} />,
+              onSelect: () => setNearbyFor(nearbyFor === ref.id ? null : ref.id),
+            },
+          ]
+        : []),
       {
         kind: 'item',
         label: 'Duplicate',
@@ -668,6 +703,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
           ? { from: pair.from.query, to: pair.to.query, mode: block.travelMode }
           : null,
         hold: false,
+        nearby: null,
       }
     }
 
@@ -692,6 +728,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         // camera home for an hour of lunch would throw away the place you were
         // looking at either side of it.
         hold: true,
+        nearby: null,
       }
     }
 
@@ -734,6 +771,19 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         commute: null,
         route: null,
         hold: false,
+        // Only while this is the block that was asked. Selecting something
+        // else puts the circle away without forgetting which block owns it.
+        nearby:
+          nearbyFor === block.id
+            ? {
+                radius: nearbyRadius,
+                onRadius: (radius: number) => {
+                  setNearbyRadius(radius)
+                  localStorage.setItem(NEARBY_KEY, String(radius))
+                },
+                onClose: () => setNearbyFor(null),
+              }
+            : null,
       }
     }
 
@@ -759,6 +809,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         commute: null,
         route: null,
         hold: false,
+        nearby: null,
       }
     }
 
@@ -782,6 +833,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
       commute: null,
       route: null,
       hold: false,
+      nearby: null,
     }
   }
 
@@ -924,6 +976,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         setSelection([])
         setSelectedLink(null)
         setEditing(null)
+        setNearbyFor(null)
         return
       }
       if (e.key === 'Backspace' || e.key === 'Delete') {

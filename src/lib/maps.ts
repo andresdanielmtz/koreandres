@@ -3,10 +3,10 @@
  * and flies its camera between places, so selecting a block moves the map
  * rather than reloading it.
  *
- * The key needs three APIs enabled on its Google Cloud project: *Maps
+ * The key needs four APIs enabled on its Google Cloud project: *Maps
  * JavaScript API* to draw the map, *Geocoding API* to turn a typed place into
- * coordinates, and *Directions API* for the route a commute block draws. See
- * docs/setup.md.
+ * coordinates, *Directions API* for the route a commute block draws, and
+ * *Places API (New)* for the restaurants around a block. See docs/setup.md.
  *
  * Only VITE_-prefixed variables reach the browser, so a key named
  * GOOGLE_MAPS_API_KEY would silently read as undefined.
@@ -223,9 +223,10 @@ export function loadMaps(): Promise<void> {
     const params = new URLSearchParams({
       key: MAPS_KEY,
       v: 'weekly',
-      // AdvancedMarkerElement lives in `marker` and the directions classes in
-      // `routes`; Geocoder comes with the core namespace.
-      libraries: 'marker,routes',
+      // AdvancedMarkerElement lives in `marker`, the directions classes in
+      // `routes` and the nearby search in `places`; Geocoder comes with the
+      // core namespace.
+      libraries: 'marker,routes,places',
       loading: 'async',
       callback: CALLBACK,
     })

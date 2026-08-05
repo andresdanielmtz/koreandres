@@ -229,6 +229,26 @@ the SDK once, pulling a place out of a Google Maps URL, and the mercator sum
 behind `zoomForBounds`. With no key it rejects, and the pane says which
 variable is missing instead of showing a broken map.
 
+## What's around a block
+
+Right-clicking an event block that says where it is offers "Nearby
+restaurants". It draws a circle around the block, a dot per result, and a list
+in the pane sorted by distance — Google ranks by how well known a place is,
+which is the right question to ask it, but a list you are going to walk reads
+nearest first.
+
+The slider and the search are deliberately out of step. The circle is resized
+on the frame the slider moves, because a control that lags reads as broken; the
+search waits `NEARBY_SETTLE_MS` for the drag to settle, because each one is a
+billed request and the intermediate radii were never the question. The camera
+is left alone unless the circle has grown outside the pane, since flying on
+every step of a slider is unusable.
+
+Which block is being asked lives in `Board`, not in the pane, so selecting
+something else puts the circle away without forgetting; the radius is in local
+storage, because how far you'll walk to dinner is a preference rather than a
+property of one block.
+
 ## When there is no route
 
 Google will not route a car, a bike or a pair of feet anywhere in South Korea.

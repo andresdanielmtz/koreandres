@@ -721,6 +721,116 @@ kbd {
   color: var(--text-2);
 }
 
+/* ------------------------------------------------------------- nearby -- */
+
+.map-nearby {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+
+.map-nearby-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.map-nearby-head button {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    background-color var(--dur) var(--ease);
+}
+
+.map-nearby-head button:hover {
+  color: var(--text);
+  border-color: var(--line-2);
+  background: var(--hover);
+}
+
+/* The native control, in the app's accent. A hand-built thumb would be one
+   more thing to keep in two themes for no gain. */
+.map-radius {
+  width: 100%;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.map-poi-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 164px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.map-poi-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.map-poi-list a {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  text-decoration: none;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.map-poi-list a:hover {
+  background: var(--hover);
+}
+
+.map-poi-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.map-poi-rating,
+.map-poi-far {
+  flex: none;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+
+.map-nearby-none {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+/* One restaurant on the map. It rides inside Google's own DOM, so it is styled
+   here rather than by a symbol — a flat dot, like everything else. */
+.map-poi {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .map-frame {
   position: relative;
   flex: 1;

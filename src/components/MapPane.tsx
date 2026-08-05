@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { TRAVEL_MODE_LABEL, TRAVEL_MODES, TRAVEL_SPEED_KMH } from '../lib/constants'
+import {
+  NEARBY_RADIUS_MAX,
+  NEARBY_RADIUS_MIN,
+  NEARBY_RADIUS_STEP,
+  TRAVEL_MODE_LABEL,
+  TRAVEL_MODES,
+  TRAVEL_SPEED_KMH,
+} from '../lib/constants'
 import { formatMetres } from '../lib/estimate'
 import { isShortMapsUrl, MAPS_KEY_VAR, mapsSearchUrl } from '../lib/maps'
 import { formatDuration } from '../lib/time'
@@ -25,6 +32,14 @@ export type CommuteView = {
   onMode: (mode: TravelMode) => void
 }
 
+/** The pane's nearby half: how wide a circle to look in, and a way out. */
+export type NearbyView = {
+  /** Metres. Owned by `Board`, so it survives selecting something else. */
+  radius: number
+  onRadius: (radius: number) => void
+  onClose: () => void
+}
+
 /** What the pane is looking at. Derived from the selection by `Board`. */
 export type MapView = {
   /** Identifies the subject, so the fields remount when the selection moves. */
@@ -48,6 +63,8 @@ export type MapView = {
   onResolved: ((place: ResolvedPlace) => void) | null
   /** Set only for a commute block, and it replaces the fields above. */
   commute: CommuteView | null
+  /** Set while this block is being asked what is around it. */
+  nearby: NearbyView | null
   /** The trip to draw. Null while either end is still unknown. */
   route: MapRoute | null
   /** The subject isn't anywhere — a trivia block. The map keeps its camera
@@ -65,7 +82,7 @@ type Props = {
 
 export function MapPane({ view, width, theme, focus }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
-  const { status, missing, route, routeError, estimate } = useGoogleMap(
+  const { status, missing, route, routeError, estimate, nearby } = useGoogleMap(
     canvasRef,
     {
       key: view.id,
@@ -76,6 +93,7 @@ export function MapPane({ view, width, theme, focus }: Props) {
       onResolved: view.onResolved,
       route: view.route,
       hold: view.hold,
+      nearby: view.nearby,
     },
     theme,
   )
@@ -173,6 +191,51 @@ export function MapPane({ view, width, theme, focus }: Props) {
         )
       )}
 
+      {view.nearby && (
+        <div className="map-nearby">
+          <div className="map-nearby-head">
+            <span>Restaurants within {formatMetres(view.nearby.radius)}</span>
+            <button type="button" onClick={view.nearby.onClose}>
+              Hide
+            </button>
+          </div>
+          {/* The circle follows this on the frame; the search waits until you
+              let go of it. */}
+          <input
+            className="map-radius"
+            type="range"
+            min={NEARBY_RADIUS_MIN}
+            max={NEARBY_RADIUS_MAX}
+            step={NEARBY_RADIUS_STEP}
+            value={view.nearby.radius}
+            aria-label="How far around the block to look"
+            onChange={(e) => view.nearby?.onRadius(Number(e.target.value))}
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+          {Array.isArray(nearby) &&
+            (nearby.length ? (
+              <ul className="map-poi-list">
+                {nearby.map((poi) => (
+                  <li key={poi.id}>
+                    <a href={poi.url || mapsSearchUrl(poi.name)} target="_blank" rel="noreferrer">
+                      <span className="map-poi-name">{poi.name}</span>
+                      {poi.rating != null && (
+                        <span className="map-poi-rating">★ {poi.rating.toFixed(1)}</span>
+                      )}
+                      <span className="map-poi-far">{formatMetres(poi.metres)}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="map-nearby-none">
+                Nothing here. Widen the circle, or the block's location is somewhere
+                unexpected.
+              </p>
+            ))}
+        </div>
+      )}
+
       <div className="map-frame">
         {/* The map is built into this element once and then flown around —
             it is deliberately never re-rendered by React. */}
@@ -242,6 +305,17 @@ export function MapPane({ view, width, theme, focus }: Props) {
 
         {status === 'ready' && routeError === 'failed' && (
           <div className="map-toast">Couldn't work out a route. The console has the reason.</div>
+        )}
+
+        {status === 'ready' && nearby === 'denied' && (
+          <div className="map-toast">
+            <strong>Places API (New) isn't enabled</strong> on this key. It is a separate one
+            from the three the rest of the pane uses — turn it on in the Google Cloud console.
+          </div>
+        )}
+
+        {status === 'ready' && nearby === 'failed' && (
+          <div className="map-toast">Couldn't look around this block. The console has why.</div>
         )}
 
         {status === 'ready' && missing && !shortened && !view.commute && (

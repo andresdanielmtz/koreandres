@@ -140,8 +140,20 @@ mapping export restriction rather than a gap, so there is nothing to retry and
 no key that fixes it. Those three fall back to `lib/estimate.ts`: straight-line
 distance times `TRAVEL_DETOUR` at `TRAVEL_SPEED_KMH`, drawn as a dashed
 polyline and printed with a `≈`. Don't present that number as a route.
+**Nearby restaurants are a fourth API.** Right-clicking a located event block
+offers a search around it: `Place.searchNearby` out of the `places` library, a
+`google.maps.Circle` sized by the pane's slider, and one
+`AdvancedMarkerElement` per result whose content is a styled div, so the dots
+follow the theme. The circle answers the slider on the frame it moves; the
+search waits `NEARBY_SETTLE_MS` for the drag to settle, because every one of
+those is a billed request. The camera is only pulled back when the circle has
+grown out of the pane — flying on every step of a slider is unusable. Which
+block is being asked, and how wide, lives in `Board` (the radius in
+localStorage), so it survives selecting something else. Places API (New) is a
+separate enablement from the other three; `denied` is what that looks like.
+
 `lib/maps.ts` reads `VITE_GOOGLE_MAPS_API_KEY` (needs Maps JavaScript API,
-Geocoding API **and** Directions API) and the two `VITE_GOOGLE_MAPS_MAP_ID*` vars; running with no key is a supported
+Geocoding API, Directions API **and** Places API (New)) and the two `VITE_GOOGLE_MAPS_MAP_ID*` vars; running with no key is a supported
 state, so don't make the pane assume one. The map's appearance lives in the
 Cloud console, not here — a `styles` array is ignored once `mapId` is set.
 

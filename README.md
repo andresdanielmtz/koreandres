@@ -31,13 +31,18 @@ The map pane wants one more line in that same `.env`:
 VITE_GOOGLE_MAPS_API_KEY=your-key
 ```
 
-A Google Cloud API key with three APIs enabled on it: **Maps JavaScript API** to
+A Google Cloud API key with four APIs enabled on it: **Maps JavaScript API** to
 draw the map, **Geocoding API** to turn a place you've typed into somewhere to
-fly to, and **Directions API** for the route a commute block draws between two
-of them. One thing it can't do: the short `maps.app.goo.gl` links the share
-button gives you only resolve by following their redirect, which a page with no
-server of its own isn't allowed to do. Open one and paste the full link it
-lands on, or just the name of the place. Without it the app still runs; the pane tells you which variable is
+fly to, **Directions API** for the route a commute block draws between two of
+them, and **Places API (New)** for the restaurants around a block. Two things
+it can't do: Google routes nothing but transit inside South Korea, so walking
+and driving times are estimated from the distance and marked with a `≈`. And
+the short `maps.app.goo.gl` links the share button gives you only resolve by
+following their redirect, which a page with no server of its own isn't allowed
+to do — open one and paste the full link it lands on, or just the name of the
+place.
+
+Without a key the app still runs; the pane tells you which variable is
 missing and every location keeps its link out to Google Maps. Setting one up,
 and restricting it so it can't be lifted out of the bundle, is in
 [docs/setup.md](docs/setup.md#setting-up-the-map).

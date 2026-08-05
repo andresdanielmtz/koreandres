@@ -123,6 +123,14 @@ export const IconPin = ({ size = 14 }: Props) => (
   </svg>
 )
 
+export const IconFork = ({ size = 14 }: Props) => (
+  <svg {...base(size)}>
+    <path d="M4 2v3.2a1.6 1.6 0 0 0 3.2 0V2" />
+    <path d="M5.6 6.8V14" />
+    <path d="M11.6 14V2c1.6 1.3 1.6 5.1 0 6.4" />
+  </svg>
+)
+
 export const IconCup = ({ size = 14 }: Props) => (
   <svg {...base(size)}>
     <path d="M3 3.5h8v4.8a4 4 0 0 1-8 0Z" />

@@ -10,6 +10,8 @@ import {
   MAP_POINT_ZOOM,
   MAP_ROUTE_BACKOFF,
   MAP_ZOOM_BACKOFF,
+  NEARBY_MAX_RESULTS,
+  NEARBY_SETTLE_MS,
 } from '../lib/constants'
 import {
   hasMapsKey,
@@ -21,7 +23,7 @@ import {
   usesColorScheme,
   zoomForBounds,
 } from '../lib/maps'
-import { estimateTrip, type TripEstimate } from '../lib/estimate'
+import { estimateTrip, metresBetween, type TripEstimate } from '../lib/estimate'
 import { clamp } from '../lib/time'
 import type { TravelMode } from '../lib/types'
 
@@ -56,6 +58,23 @@ export type RouteInfo = {
  *  enabled on the key, which is the one worth spelling out. */
 export type RouteError = 'none' | 'denied' | 'failed'
 
+/** A restaurant found around the selected block. */
+export type NearbyPlace = {
+  id: string
+  name: string
+  at: google.maps.LatLngLiteral
+  /** Straight-line metres from the block, which is what the list sorts on. */
+  metres: number
+  rating: number | null
+  reviews: number
+  /** Its page on Google Maps. Empty if it hasn't got one. */
+  url: string
+}
+
+/** Why there is nothing around the block. `denied` is the Places API not being
+ *  enabled on the key — it is a separate one from the other three. */
+export type NearbyError = 'denied' | 'failed'
+
 export type MapPlace = {
   /** Identifies the block, so a slow answer lands on the right one. */
   key: string
@@ -71,6 +90,9 @@ export type MapPlace = {
   /** The subject has no location at all — a trivia block. Nothing is looked
    *  up and the camera stays where it is. */
   hold: boolean
+  /** Set while the block is being asked what is around it. The centre is the
+   *  place above, once it has resolved. */
+  nearby: { radius: number } | null
 }
 
 /** Where the camera should end up: a point, and how close to stand to it. */
@@ -137,6 +159,8 @@ export function useGoogleMap(
   const routeCache = useRef(new Map<string, google.maps.DirectionsResult | RouteError>())
   /** The straight line stood in for a route Google won't work out. */
   const directRef = useRef<google.maps.Polyline | null>(null)
+  const circleRef = useRef<google.maps.Circle | null>(null)
+  const poisRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([])
 
   /* Read after an await, where the render that started it is long gone. */
   const resolvedRef = useRef(place.onResolved)
@@ -161,6 +185,19 @@ export function useGoogleMap(
   /** What the trip works out at when the router has no route to give — read
    *  back through the current question, exactly like `answer` above. */
   const [guess, setGuess] = useState<{ key: string; trip: TripEstimate } | null>(null)
+  /** Where a block that had to be looked up turned out to be. State rather
+   *  than a ref, because a nearby search has to re-run when the answer lands;
+   *  a block that was already carrying coordinates never gets here. */
+  const [located, setLocated] = useState<{
+    key: string
+    at: google.maps.LatLngLiteral
+  } | null>(null)
+  /** What was found around it, tagged with the block asked about. Kept while a
+   *  wider radius is being fetched, so the list doesn't blink on every drag. */
+  const [around, setAround] = useState<{
+    key: string
+    places: NearbyPlace[] | NearbyError
+  } | null>(null)
 
   /** Ask Google what is at a point, for something to call it. */
   async function describe(point: google.maps.LatLngLiteral): Promise<string> {
@@ -418,6 +455,159 @@ export function useGoogleMap(
     }
   }
 
+  /* ---------------------------------------------------------------- nearby -- */
+
+  /**
+   * Restaurants inside the circle. Google ranks them by how well known they
+   * are, which is the right question to ask it; the list is then sorted by
+   * distance here, because one you are going to walk to is read nearest first.
+   */
+  async function searchNearby(
+    at: google.maps.LatLngLiteral,
+    radius: number,
+  ): Promise<NearbyPlace[] | NearbyError> {
+    try {
+      const { places } = await google.maps.places.Place.searchNearby({
+        fields: ['id', 'displayName', 'location', 'rating', 'userRatingCount', 'googleMapsURI'],
+        locationRestriction: { center: at, radius },
+        includedPrimaryTypes: ['restaurant'],
+        maxResultCount: NEARBY_MAX_RESULTS,
+        rankPreference: google.maps.places.SearchNearbyRankPreference.POPULARITY,
+      })
+      return places
+        .flatMap((p) => {
+          const point = p.location?.toJSON()
+          if (!point) return []
+          return [
+            {
+              id: p.id,
+              name: p.displayName ?? '',
+              at: point,
+              metres: metresBetween(at, point),
+              rating: p.rating ?? null,
+              reviews: p.userRatingCount ?? 0,
+              url: p.googleMapsURI ?? '',
+            },
+          ]
+        })
+        .sort((a, b) => a.metres - b.metres)
+    } catch (err: unknown) {
+      // Places is a fourth API to enable, and this is what it says when it
+      // hasn't been. Everything else is worth a look in the console.
+      const reason: NearbyError = /denied|not authorized|ApiNotActivated|PERMISSION/i.test(
+        String(err),
+      )
+        ? 'denied'
+        : 'failed'
+      if (reason === 'failed') console.warn('[map] nearby search failed', err)
+      return reason
+    }
+  }
+
+  function showCircle(at: google.maps.LatLngLiteral, radius: number) {
+    const map = mapRef.current
+    if (!map) return null
+    const circle = (circleRef.current ??= new google.maps.Circle({
+      // It marks how far you asked about; clicking it should reach the map.
+      clickable: false,
+      strokeColor: cssColor('--accent', '#2c6bed'),
+      strokeOpacity: 0.75,
+      strokeWeight: 1,
+      fillColor: cssColor('--accent', '#2c6bed'),
+      fillOpacity: 0.07,
+    }))
+    circle.setCenter(at)
+    circle.setRadius(radius)
+    circle.setMap(map)
+    return circle
+  }
+
+  /** A dot per restaurant. The content is DOM, so the stylesheet owns how they
+   *  look and they follow the theme like everything else. */
+  function showPois(places: NearbyPlace[]) {
+    const map = mapRef.current
+    if (!map) return
+    clearPois()
+    for (const p of places) {
+      const dot = document.createElement('div')
+      dot.className = 'map-poi'
+      poisRef.current.push(
+        new google.maps.marker.AdvancedMarkerElement({
+          map,
+          position: p.at,
+          title: p.name,
+          content: dot,
+        }),
+      )
+    }
+  }
+
+  function clearPois() {
+    for (const marker of poisRef.current) marker.map = null
+    poisRef.current = []
+  }
+
+  /** Pull the camera back only when the circle has grown out of the pane —
+   *  a slider that flew the map on every step would be unusable. */
+  function frameCircle(circle: google.maps.Circle) {
+    const map = mapRef.current
+    const el = containerRef.current
+    const bounds = circle.getBounds()
+    if (!map || !el || !bounds) return
+    const shown = map.getBounds()
+    if (shown?.contains(bounds.getNorthEast()) && shown.contains(bounds.getSouthWest())) return
+    flyTo({
+      center: bounds.getCenter().toJSON(),
+      zoom: clamp(
+        zoomForBounds(bounds, el.clientWidth, el.clientHeight) - MAP_ROUTE_BACKOFF,
+        MAP_MIN_ZOOM,
+        MAP_MAX_ZOOM,
+      ),
+    })
+  }
+
+  /**
+   * The one point a circle can go around: what the block was saved with, else
+   * what looking it up came back with. Null for anything that isn't a single
+   * place — a commute, a trivia block, a location that hasn't resolved yet.
+   */
+  const pin =
+    place.hold || place.route
+      ? null
+      : place.lat != null && place.lng != null
+        ? { lat: place.lat, lng: place.lng }
+        : located?.key === place.key
+          ? located.at
+          : null
+
+  useEffect(() => {
+    const want = place.nearby
+    if (!built || !want || !pin) {
+      circleRef.current?.setMap(null)
+      clearPois()
+      return
+    }
+
+    // The circle answers the slider on the frame it moves; the search waits
+    // for the drag to settle, since every one of those is a request.
+    const circle = showCircle(pin, want.radius)
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      void searchNearby(pin, want.radius).then((places) => {
+        if (cancelled) return
+        setAround({ key: place.key, places })
+        if (Array.isArray(places)) showPois(places)
+        if (circle) frameCircle(circle)
+      })
+    }, NEARBY_SETTLE_MS)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [built, place.key, place.nearby?.radius, pin?.lat, pin?.lng])
+
   /* ------------------------------------------------------------- the map -- */
 
   useEffect(() => {
@@ -447,6 +637,8 @@ export function useGoogleMap(
         markerRef.current = null
         rendererRef.current = null
         directRef.current = null
+        circleRef.current = null
+        poisRef.current = []
         const map = new google.maps.Map(el, {
           ...from,
           mapId: mapIdFor(theme),
@@ -601,6 +793,7 @@ export function useGoogleMap(
       setFailed(found ? null : place.query.trim())
       flyTo(found ? { center: found, zoom: found.zoom } : HOME)
       showMarker(found ?? null)
+      setLocated(found ? { key: place.key, at: { lat: found.lat, lng: found.lng } } : null)
       if (found) resolvedRef.current?.(found)
     })
 
@@ -631,11 +824,16 @@ export function useGoogleMap(
   const current = answer?.key === routeKey(place.route) ? answer : null
   const estimated = guess?.key === routeKey(place.route) ? guess.trip : null
 
+  // And again: what was found around the last block asked about is nothing to
+  // do with the one selected now.
+  const nearby = around?.key === place.key ? around.places : null
+
   return {
     status,
     missing,
     route: current?.info ?? null,
     routeError: current?.error ?? null,
     estimate: estimated,
+    nearby,
   }
 }

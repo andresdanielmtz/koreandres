@@ -91,6 +91,24 @@ export const MAP_POINT_ZOOM = 15
  *  spans two of them. */
 export const MAP_ROUTE_BACKOFF = 0.5
 
+/* ---------------------------------------------------------------- nearby -- */
+
+/** The circle a nearby search covers, in metres, and how far the slider runs.
+ *  The floor is a block or two; the ceiling is further than anyone walks to
+ *  dinner, which is what the search is for. */
+export const NEARBY_RADIUS_DEFAULT = 500
+export const NEARBY_RADIUS_MIN = 100
+export const NEARBY_RADIUS_MAX = 3000
+export const NEARBY_RADIUS_STEP = 50
+
+/** Most Google returns for one search, and it is the most a list this size can
+ *  usefully hold anyway. */
+export const NEARBY_MAX_RESULTS = 20
+
+/** How long the slider has to sit still before the search runs. The circle
+ *  itself follows the drag — it is the request that waits. */
+export const NEARBY_SETTLE_MS = 350
+
 /** Width of the preview pane, and how far the divider may be dragged. */
 export const MAP_PANE_DEFAULT = 460
 export const MAP_PANE_MIN = 280
