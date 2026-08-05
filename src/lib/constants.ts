@@ -23,6 +23,12 @@ export const COMMUTE_DEFAULT_MIN = 30
  *  is just the next thing on the rail — so the block asks instead of guessing. */
 export const COMMUTE_GAP_MAX = 120
 
+/* ---------------------------------------------------------------- trivia -- */
+
+/** How long a new trivia block runs. An hour is the smallest amount of nothing
+ *  worth putting on the rail; a long lunch is the same block, resized. */
+export const TRIVIA_DEFAULT_MIN = 60
+
 /* -------------------------------------------------------------- geometry -- */
 
 /** The rail spine sits at board-space x = 0. */

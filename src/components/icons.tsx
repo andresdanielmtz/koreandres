@@ -123,6 +123,14 @@ export const IconPin = ({ size = 14 }: Props) => (
   </svg>
 )
 
+export const IconCup = ({ size = 14 }: Props) => (
+  <svg {...base(size)}>
+    <path d="M3 3.5h8v4.8a4 4 0 0 1-8 0Z" />
+    <path d="M11 4.9h1.3a1.7 1.7 0 0 1 0 3.4H11" />
+    <path d="M2.2 13.5h9.6" />
+  </svg>
+)
+
 export const IconTarget = ({ size = 14 }: Props) => (
   <svg {...base(size)}>
     <circle cx="8" cy="8" r="5.5" />

@@ -996,9 +996,17 @@ kbd {
   background: none;
 }
 
+/* Trivia is time set aside rather than somewhere to be. It keeps its fill,
+   since the hour is genuinely spoken for, and loses the solid edge that marks
+   a block with a place at the other end of it. */
+.tblock[data-kind='trivia'] {
+  border-left-style: dashed;
+}
+
 /* Its name is worked out from the two ends, and arrives as the placeholder.
    That is the block's real name, so it must not look like prompting text. */
-.tblock[data-kind='commute'] .tblock-title[data-empty] {
+.tblock[data-kind='commute'] .tblock-title[data-empty],
+.tblock[data-kind='trivia'] .tblock-title[data-empty] {
   color: color-mix(in srgb, var(--ink) 80%, transparent);
   font-weight: 500;
 }

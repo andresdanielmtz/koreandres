@@ -8,6 +8,7 @@ import {
   DEFAULT_TITLE,
   MIN_DURATION,
   MIN_PER_DAY,
+  TRIVIA_DEFAULT_MIN,
 } from '../lib/constants'
 import { newId, resolveStore, type BoardSummary, type ItineraryStore } from '../lib/store'
 import { clamp, snap, timeToY } from '../lib/time'
@@ -269,7 +270,8 @@ export function useItinerary() {
   ) {
     const current = snapRef.current
     if (!current || !store) return null
-    const span = kind === 'commute' ? COMMUTE_DEFAULT_MIN : 60
+    const span =
+      kind === 'commute' ? COMMUTE_DEFAULT_MIN : kind === 'trivia' ? TRIVIA_DEFAULT_MIN : 60
     const start = clamp(snap(startMin), 0, MIN_PER_DAY - span)
     const block: TimelineBlock = {
       id: newId(),

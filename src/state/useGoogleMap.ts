@@ -67,6 +67,9 @@ export type MapPlace = {
   onResolved: ((place: ResolvedPlace) => void) | null
   /** Set by a commute block. Takes over from the fields above entirely. */
   route: MapRoute | null
+  /** The subject has no location at all — a trivia block. Nothing is looked
+   *  up and the camera stays where it is. */
+  hold: boolean
 }
 
 /** Where the camera should end up: a point, and how close to stand to it. */
@@ -441,6 +444,14 @@ export function useGoogleMap(
     if (!built) return
     const want = place.route
 
+    // Nothing to show and nowhere to go: drop the pin and the line, and leave
+    // the camera on whatever was selected either side of this.
+    if (place.hold) {
+      showMarker(null)
+      showRoute(null)
+      return
+    }
+
     if (want) {
       let cancelled = false
       const key = routeKey(want)
@@ -518,6 +529,7 @@ export function useGoogleMap(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     place.key,
+    place.hold,
     place.query,
     place.lat,
     place.lng,

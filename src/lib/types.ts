@@ -2,8 +2,10 @@ export type BlockKind = 'timeline' | 'canvas'
 export type CanvasKind = 'data' | 'travel'
 
 /** What a block on the rail is. An event happens somewhere; a commute is the
- *  getting between two of them, and carries a route instead of a place. */
-export type TimelineKind = 'event' | 'commute'
+ *  getting between two of them, and carries a route instead of a place; trivia
+ *  is time that is spoken for without being anywhere — lunch, a nap, an
+ *  afternoon left deliberately empty. */
+export type TimelineKind = 'event' | 'commute' | 'trivia'
 
 /** The four Google understands. Stored as written; upper-cased at the call. */
 export type TravelMode = 'transit' | 'walking' | 'driving' | 'bicycling'
@@ -38,6 +40,7 @@ export type TimelineBlock = {
   endMin: number
   /** Exactly what was pasted into the location field: a Google Maps link,
    *  coordinates, or a place name. Empty means "no location yet". */
+  /* --- event only. A commute routes instead, and trivia isn't anywhere. --- */
   place: string
   /** What that resolved to, and where. Filled in once the geocoder answers,
    *  and saved — so reopening a board flies straight there without asking

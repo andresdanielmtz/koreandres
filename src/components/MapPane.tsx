@@ -48,6 +48,9 @@ export type MapView = {
   commute: CommuteView | null
   /** The trip to draw. Null while either end is still unknown. */
   route: MapRoute | null
+  /** The subject isn't anywhere — a trivia block. The map keeps its camera
+   *  rather than going home for it. */
+  hold: boolean
 }
 
 type Props = {
@@ -70,6 +73,7 @@ export function MapPane({ view, width, theme, focus }: Props) {
       zoom: view.zoom,
       onResolved: view.onResolved,
       route: view.route,
+      hold: view.hold,
     },
     theme,
   )

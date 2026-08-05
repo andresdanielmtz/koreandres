@@ -48,12 +48,13 @@ export function TimelineBlockView({
   const compact = rect.h < 46
   const tiny = rect.h < 26
   const commute = block.kind === 'commute'
+  const trivia = block.kind === 'trivia'
 
   return (
     <div
       className="tblock"
       data-color={block.color}
-      data-kind={commute ? 'commute' : undefined}
+      data-kind={block.kind === 'event' ? undefined : block.kind}
       data-selected={selected ? '' : undefined}
       data-targeted={targeted ? '' : undefined}
       data-compact={compact ? '' : undefined}
@@ -81,7 +82,9 @@ export function TimelineBlockView({
         <Editable
           className="tblock-title"
           value={block.title}
-          placeholder={commute ? route || TRAVEL_MODE_LABEL[block.travelMode] : 'Untitled'}
+          placeholder={
+            commute ? route || TRAVEL_MODE_LABEL[block.travelMode] : trivia ? 'Free time' : 'Untitled'
+          }
           editing={editing}
           onCommit={onTitle}
           onDone={onEditDone}
@@ -90,7 +93,7 @@ export function TimelineBlockView({
             to fit the pin reads worse than leaving the location to the pane. */}
         {/* What the location resolved to, never the raw link that was pasted.
             An unresolved block simply shows nothing yet. */}
-        {!compact && !commute && block.placeLabel && (
+        {!compact && block.kind === 'event' && block.placeLabel && (
           <div className="tblock-place">
             <IconPin size={10} />
             <span>{block.placeLabel}</span>

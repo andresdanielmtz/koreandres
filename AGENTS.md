@@ -56,7 +56,7 @@ that eases rather than cuts (the day arrows); every gesture calls `stopGlide`
 first, so nothing new may move the view without cancelling one.
 
 **A commute block is a timeline block with a route.** `TimelineBlock.kind` is
-`'event'` or `'commute'`; a commute uses `fromPlace` / `toPlace` /
+`'event'`, `'commute'` or `'trivia'`; a commute uses `fromPlace` / `toPlace` /
 `travelMode` and leaves `place` and its four resolved halves empty. **Either
 end left empty is the normal case, not a missing value** — `lib/commute.ts`
 reads it off the rail instead: the nearest located event before and after,
@@ -65,6 +65,14 @@ absolute minutes so a gap can cross midnight. Anything that changes when a
 block sits, or where, changes what the commutes around it are joining, so the
 ends are recomputed every render rather than stored. Nothing in that file
 touches Google; it answers with text, and `useGoogleMap` turns it into a route.
+
+**Trivia is time with no place.** The third kind — lunch, a nap, an afternoon
+left clear — uses none of the location or route fields, so it has no entry in
+the pane and no menu entry that would open one. `locatable` in `lib/commute.ts`
+only counts events, so a trivia block is never picked as a commute end: an hour
+of lunch between two places doesn't make lunch one of them. Selecting one sets
+`hold` on the map view, which is the one way anything asks the camera to stay
+put; the alternative was flying home to Seoul for every meal.
 
 **Days are numbers, not dates.** A `TimelineBlock` stores `dayIndex` plus
 `startMin`/`endMin` (minutes from midnight, 0–1440). The board's `startDate`

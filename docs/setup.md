@@ -115,6 +115,7 @@ equally safe — the migrations are just the smaller version.
 | --- | --- |
 | the map pane | [`001-block-locations.sql`](../supabase/migrations/001-block-locations.sql) — `place`, `place_lat`, and the rest |
 | commute blocks | [`002-commute-blocks.sql`](../supabase/migrations/002-commute-blocks.sql) — `kind`, `from_place`, `to_place`, `travel_mode` |
+| trivia blocks | [`003-trivia-blocks.sql`](../supabase/migrations/003-trivia-blocks.sql) — widens the `kind` check; no new columns |
 
 **Until you do, saving any time block fails and the toolbar says `Save failed`**
 — the app writes every column, so one missing column takes all of them down,

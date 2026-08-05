@@ -24,8 +24,11 @@ create table if not exists public.timeline_blocks (
   id         uuid primary key default gen_random_uuid(),
   board_id   uuid        not null references public.boards (id) on delete cascade,
   -- 'event' happens somewhere; 'commute' is the getting between two of them,
-  -- and carries a route (the three columns at the bottom) instead of a place.
-  kind       text        not null default 'event' check (kind in ('event', 'commute')),
+  -- and carries a route (the three columns at the bottom) instead of a place;
+  -- 'trivia' is time that is spoken for without being anywhere — lunch, a nap,
+  -- an afternoon left clear — and uses none of the location columns.
+  kind       text        not null default 'event'
+    check (kind in ('event', 'commute', 'trivia')),
   title      text        not null default '',
   notes      text        not null default '',
   day_index  integer     not null default 0,
@@ -79,7 +82,7 @@ alter table public.timeline_blocks
   drop constraint if exists timeline_blocks_travel_mode;
 
 alter table public.timeline_blocks
-  add constraint timeline_blocks_kind check (kind in ('event', 'commute')),
+  add constraint timeline_blocks_kind check (kind in ('event', 'commute', 'trivia')),
   add constraint timeline_blocks_travel_mode
     check (travel_mode in ('transit', 'walking', 'driving', 'bicycling'));
 

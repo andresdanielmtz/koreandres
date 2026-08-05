@@ -42,6 +42,7 @@ import {
   IconArrowDown,
   IconArrowUp,
   IconCopy,
+  IconCup,
   IconLink,
   IconNote,
   IconPin,
@@ -365,18 +366,19 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
     const canvasBlock = ref.kind === 'canvas' ? canvas.find((b) => b.id === ref.id) : null
     const timelineBlock = ref.kind === 'timeline' ? timeline.find((b) => b.id === ref.id) : null
     const commute = timelineBlock?.kind === 'commute'
+    const trivia = timelineBlock?.kind === 'trivia'
+    const kindLabel =
+      ref.kind === 'canvas'
+        ? canvasBlock?.kind === 'travel'
+          ? 'Travel block'
+          : 'Data block'
+        : commute
+          ? 'Commute block'
+          : trivia
+            ? 'Trivia block'
+            : 'Time block'
     return [
-      {
-        kind: 'label',
-        text:
-          ref.kind === 'timeline'
-            ? commute
-              ? 'Commute block'
-              : 'Time block'
-            : canvasBlock?.kind === 'travel'
-              ? 'Travel block'
-              : 'Data block',
-      },
+      { kind: 'label', text: kindLabel },
       { kind: 'colors', value: colorFor(ref), onPick: (c) => itinerary.setColor(ref, c) },
       { kind: 'separator' },
       {
@@ -388,30 +390,33 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
       },
       // A time block keeps its location and link in the map pane rather than on
       // the block, so these open the pane's fields instead of an inline editor.
-      // A commute keeps its two ends in the same two slots.
-      ...(ref.kind === 'timeline'
-        ? [
-            {
-              kind: 'item' as const,
-              label: commute ? 'Set start' : 'Set location',
-              icon: commute ? <IconRoute size={13} /> : <IconPin size={13} />,
-              onSelect: () => setMapFocus({ field: 'place' }),
-            },
-            {
-              kind: 'item' as const,
-              label: commute ? 'Set destination' : 'Edit link URL',
-              icon: commute ? <IconPin size={13} /> : <IconLink size={13} />,
-              onSelect: () => setMapFocus({ field: 'url' }),
-            },
-          ]
-        : [
-            {
-              kind: 'item' as const,
-              label: 'Edit link URL',
-              icon: <IconLink size={13} />,
-              onSelect: () => setEditing({ ref, field: 'url' }),
-            },
-          ]),
+      // A commute keeps its two ends in the same two slots; trivia has neither,
+      // which is the whole point of it.
+      ...(trivia
+        ? []
+        : ref.kind === 'timeline'
+          ? [
+              {
+                kind: 'item' as const,
+                label: commute ? 'Set start' : 'Set location',
+                icon: commute ? <IconRoute size={13} /> : <IconPin size={13} />,
+                onSelect: () => setMapFocus({ field: 'place' }),
+              },
+              {
+                kind: 'item' as const,
+                label: commute ? 'Set destination' : 'Edit link URL',
+                icon: commute ? <IconPin size={13} /> : <IconLink size={13} />,
+                onSelect: () => setMapFocus({ field: 'url' }),
+              },
+            ]
+          : [
+              {
+                kind: 'item' as const,
+                label: 'Edit link URL',
+                icon: <IconLink size={13} />,
+                onSelect: () => setEditing({ ref, field: 'url' }),
+              },
+            ]),
       {
         kind: 'item',
         label: 'Duplicate',
@@ -527,6 +532,21 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
           onSelect: () => {
             const created = itinerary.addTimelineBlock(dayIndex, minute, 'slate', 'commute')
             if (created) setSelection([{ kind: 'timeline', id: created.id }])
+          },
+        },
+        {
+          kind: 'item',
+          label: 'Add trivia',
+          hint: onRail ? formatTime(snap(minute)) : undefined,
+          icon: <IconCup size={13} />,
+          // Lunch, a nap, an afternoon kept clear. It has no location, so the
+          // title is the whole of it and the editor opens straight away.
+          onSelect: () => {
+            const created = itinerary.addTimelineBlock(dayIndex, minute, 'amber', 'trivia')
+            if (created) {
+              setSelection([{ kind: 'timeline', id: created.id }])
+              setEditing({ ref: { kind: 'timeline', id: created.id }, field: 'title' })
+            }
           },
         },
         { kind: 'separator' },
@@ -647,6 +667,31 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         route: canRoute
           ? { from: pair.from.query, to: pair.to.query, mode: block.travelMode }
           : null,
+        hold: false,
+      }
+    }
+
+    if (block?.kind === 'trivia') {
+      return {
+        id: `timeline:${block.id}`,
+        title: block.title || 'Free time',
+        meta: `${formatDayLabel(board.startDate, block.dayIndex)} · ${formatTime(block.startMin)} – ${formatTime(block.endMin)}`,
+        query: '',
+        lat: null,
+        lng: null,
+        zoom: null,
+        label: '',
+        place: '',
+        url: '',
+        onPlace: null,
+        onUrl: null,
+        onResolved: null,
+        commute: null,
+        route: null,
+        // Trivia isn't anywhere, so there is nothing to fly to. Sending the
+        // camera home for an hour of lunch would throw away the place you were
+        // looking at either side of it.
+        hold: true,
       }
     }
 
@@ -688,6 +733,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
           }),
         commute: null,
         route: null,
+        hold: false,
       }
     }
 
@@ -712,6 +758,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         onResolved: null,
         commute: null,
         route: null,
+        hold: false,
       }
     }
 
@@ -734,6 +781,7 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
       onResolved: null,
       commute: null,
       route: null,
+      hold: false,
     }
   }
 
