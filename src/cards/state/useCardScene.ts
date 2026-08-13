@@ -23,6 +23,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { PerspectiveCamera, Scene } from 'three'
 import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js'
+import { clamp } from '../../lib/time'
 import {
   CARD_DEAL_MS,
   CARD_FLIP_MS,
@@ -55,6 +56,10 @@ type Slot = {
   /** Kept so a resize can re-derive the target from the new anchors. */
   place: CardPlace
   depth: number
+  /** Where a drag has pushed it, relative to its anchor. Survives a resize —
+   *  a window you moved stays where you put it — and is cleared the moment the
+   *  card is sent somewhere else. */
+  offset: { x: number; y: number }
   from: Pose
   to: Pose
   /** Milliseconds into the move; equal to `ms` once it has landed. */
@@ -99,10 +104,16 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     if (scene && camera && renderer) renderer.render(scene, camera)
   }
 
-  /** Where a place puts a card, with its depth in the stack folded in. */
-  function poseFor(place: CardPlace, depth: number): Pose {
+  /** Where a place puts a card, with its depth in the stack and any drag it
+   *  has been given folded in. */
+  function poseFor(place: CardPlace, depth: number, offset = { x: 0, y: 0 }): Pose {
     const a = anchorsRef.current[place]
-    return { ...a, y: a.y + depth * CARD_STACK_STEP, z: a.z + depth * CARD_STACK_STEP }
+    return {
+      ...a,
+      x: a.x + offset.x,
+      y: a.y + depth * CARD_STACK_STEP + offset.y,
+      z: a.z + depth * CARD_STACK_STEP,
+    }
   }
 
   const current = (slot: Slot): Pose => ({
@@ -210,7 +221,19 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     const at = poseFor(place, depth)
     scene.add(object)
 
-    const slot: Slot = { id, el, object, place, depth, from: at, to: at, t: 0, ms: 0, lift: 0 }
+    const slot: Slot = {
+      id,
+      el,
+      object,
+      place,
+      depth,
+      offset: { x: 0, y: 0 },
+      from: at,
+      to: at,
+      t: 0,
+      ms: 0,
+      lift: 0,
+    }
     write(slot, at)
     slotsRef.current.set(id, slot)
     setMounted((m) => [...m, { id, el }])
@@ -226,6 +249,9 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     if (!slot) return
     slot.place = place
     slot.depth = opts.depth ?? 0
+    // A card sent somewhere else forgets where it was dragged to; the pile is
+    // a pile whatever route the card took to reach it.
+    slot.offset = { x: 0, y: 0 }
     slot.from = current(slot)
     slot.to = poseFor(place, slot.depth)
     slot.t = 0
@@ -255,6 +281,47 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
   /** Table back to the deck, turning face down again. */
   const toDeck = (id: string, done?: () => void) =>
     move(id, 'deck', { ms: CARD_RETURN_MS, lift: CARD_LIFT / 2, done })
+
+  /** Where a drag has already pushed this card, so a new one starts from it. */
+  const offsetOf = (id: string) => slotsRef.current.get(id)?.offset ?? { x: 0, y: 0 }
+
+  /** Holds an offset to what keeps the whole card on the table. */
+  function onTable(slot: Slot, want: { x: number; y: number }) {
+    const host = hostRef.current
+    if (!host) return want
+    const anchor = anchorsRef.current[slot.place]
+    const limitX = Math.max(0, (host.clientWidth - CARD_W) / 2)
+    const limitY = Math.max(0, (host.clientHeight - CARD_H) / 2)
+    return {
+      x: clamp(want.x, -limitX - anchor.x, limitX - anchor.x),
+      y: clamp(want.y, -limitY - anchor.y, limitY - anchor.y),
+    }
+  }
+
+  /**
+   * Puts a card down at an absolute offset from its anchor — the drag.
+   *
+   * It writes and paints on the spot rather than starting a tween: this is the
+   * one move the pointer is holding, and nothing the pointer is holding ever
+   * eases. It also stops any flight still in progress, so grabbing a card
+   * mid-deal takes it over instead of fighting it.
+   *
+   * The offset is clamped so the card stays wholly on the table. A window you
+   * can shove off the edge of the screen is a window you can lose, and Keep and
+   * Discard live at the bottom of this one — pushing them out of the table's
+   * `overflow: hidden` would strand the card with no way to answer it.
+   */
+  function dragTo(id: string, x: number, y: number) {
+    const slot = slotsRef.current.get(id)
+    if (!slot) return
+    slot.offset = onTable(slot, { x, y })
+    slot.to = poseFor(slot.place, slot.depth, slot.offset)
+    slot.from = slot.to
+    slot.t = slot.ms
+    slot.done = undefined
+    write(slot, slot.to)
+    render()
+  }
 
   function remove(id: string) {
     const slot = slotsRef.current.get(id)
@@ -300,7 +367,9 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
       // is the lag the whole app is written to avoid.
       for (const slot of slotsRef.current.values()) {
         if (slot.t < slot.ms) continue
-        slot.to = poseFor(slot.place, slot.depth)
+        // A drag that was on the table at the old size may not be at this one.
+        slot.offset = onTable(slot, slot.offset)
+        slot.to = poseFor(slot.place, slot.depth, slot.offset)
         settle(slot)
       }
       render()
@@ -328,5 +397,5 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return { mounted, add, deal, toPile, toDeck, remove }
+  return { mounted, add, deal, toPile, toDeck, dragTo, offsetOf, remove }
 }
