@@ -70,15 +70,24 @@ export function CardDesk({ cards }: Props) {
 
   /* ---------------------------------------------------------- the round -- */
 
-  /** Deals a hand out of a deck. Nothing is drawn yet — these are backs. */
-  function take(category: CardCategory) {
-    if (hand || shown) return
+  /**
+   * Deals a hand out of a deck. Nothing is drawn yet — these are backs.
+   *
+   * The round counter in the slot ids matters: reusing them between hands would
+   * let React match the new hand's portals to the last one's.
+   */
+  function dealHand(category: CardCategory) {
     const n = Math.min(CARD_FAN_COUNT, cards.deckSize(category))
     if (!n) return
     round.current += 1
     const ids = Array.from({ length: n }, (_, i) => `hand${round.current}:${i}`)
     scene.fanOut(ids)
     setHand({ category, ids })
+  }
+
+  function take(category: CardCategory) {
+    if (hand || shown) return
+    dealHand(category)
   }
 
   /** Turns the picked card over. This is where the deck is actually drawn. */
@@ -103,15 +112,35 @@ export function CardDesk({ cards }: Props) {
     landing.current = window.setTimeout(() => setReady(true), CARD_DEAL_MS + CARD_FLIP_MS)
   }
 
-  function answer(resolve: () => Card | null, to: 'pile' | 'deck') {
+  /** Keeps the card. It leaves for the seen pile and the round is over. */
+  function keep() {
     if (!shown) return
     const slotId = shown.slotId
-    if (!resolve()) return
+    if (!cards.keep()) return
     setReady(false)
     setShown(null)
-    const done = () => scene.remove(slotId)
-    if (to === 'pile') scene.toPile(slotId, Math.min(cards.kept.length, CARD_STACK_SHOWN), done)
-    else scene.toDeck(slotId, done)
+    scene.toPile(slotId, Math.min(cards.kept.length, CARD_STACK_SHOWN), () => scene.remove(slotId))
+  }
+
+  /**
+   * Puts the card back and deals again from the same deck, so working through a
+   * deck is a run of presses rather than a press per card.
+   *
+   * The new hand goes out while the discard is still on its way home. That is
+   * the right order rather than a race: the card is already back in the deck as
+   * far as the machine is concerned — a discard changes no state — so nothing
+   * is waiting on it, and one flight crossing another is what a table looks
+   * like. `dealHand` is called instead of `take` because `hand` and `shown` are
+   * still the old values in this closure and the guard would refuse.
+   */
+  function discard() {
+    if (!shown) return
+    const { slotId, card } = shown
+    if (!cards.discard()) return
+    setReady(false)
+    setShown(null)
+    scene.toDeck(slotId, () => scene.remove(slotId))
+    dealHand(card.category)
   }
 
   /**
@@ -166,8 +195,8 @@ export function CardDesk({ cards }: Props) {
           ready={ready}
           empty="Take a card from one of the decks below."
           onPick={pick}
-          onKeep={() => answer(cards.keep, 'pile')}
-          onDiscard={() => answer(cards.discard, 'deck')}
+          onKeep={keep}
+          onDiscard={discard}
           onOpenPhoto={(id, index) => setViewing({ id, index })}
           onGrab={grab}
         />

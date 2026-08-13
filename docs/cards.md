@@ -41,6 +41,20 @@ Pressing **Take one** does not draw anything. It deals a hand of
 Picking one of them is what draws: the card flips over on its way to the middle
 and the rest go back to the deck.
 
+Then the two answers part ways:
+
+| | |
+| --- | --- |
+| **Keep** | The card leaves for the seen pile and the round ends. |
+| **Discard** | The card goes back and a fresh hand is dealt from the same deck straight away, so working through a deck is a run of presses rather than a press per card. |
+
+The new hand goes out while the discard is still on its way home. That is the
+right order rather than a race — a discard changes no state, so the card is
+already back in the deck as far as the machine is concerned, and nothing is
+waiting on the flight. `discard` calls `dealHand` rather than `take` because
+`hand` and `shown` are still the previous values inside that closure and
+`take`'s guard would refuse.
+
 The four backs are **not** four candidates. Only the back is rendered for them —
 no front at all — so nothing about a place you haven't turned over is sitting in
 the DOM. Which card you got is decided at the instant you pick, by the same
@@ -67,7 +81,7 @@ derivation, which is also one row per card in the database.
 | **take one** | Nothing. A hand of backs is dealt; no card has been drawn yet. |
 | **pick** | `draws[id]` goes up by one. The card is *not* removed from the deck. |
 | **keep** | `states[id] = 'kept'`. It leaves its deck and appears in Seen. |
-| **discard** | Nothing. It was never taken out. |
+| **discard** | Nothing to the deck — it was never taken out. A new hand is dealt from the same category. |
 
 That is the point of the shape: **a discard is the absence of an edit.** Keeping
 is the only thing that removes a card from a deck.
@@ -328,7 +342,8 @@ whoever adds one. In rough order of value:
 13. `draw` is a no-op while a card is already drawn — and `take` is a no-op
     while a hand is already out, so a round can't be started twice.
 14. `keep` sets `'kept'` and the card leaves `deckSize`; `discard` leaves
-    `deckSize` unchanged.
+    `deckSize` unchanged and deals a new hand from the same category, while
+    `keep` leaves the table empty.
 15. `fill` does not search when `isStale` is false, and does not issue a second
     search for a category already in flight.
 16. `useCards(false)` never resolves a store or issues a search.
