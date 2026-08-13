@@ -59,6 +59,14 @@ Restart `npm run dev` and the toolbar should say `Synced` instead of
 `Local only`. If it still says `Local only`, open the browser console. The app
 logs why it fell back.
 
+### Card mode's tables are a second file
+
+[`supabase/cards.sql`](../supabase/cards.sql) is separate and has to be run the
+same way. It is optional: the board doesn't need it, and card mode without it
+still works — it falls back to localStorage and says so in the console. What you
+lose is the decks following you to another browser. See
+[cards.md](cards.md).
+
 ## What the tables are
 
 Four of them, and everything hangs off a board, so one project can hold as many
@@ -160,8 +168,10 @@ a project, then under **APIs & Services → Library**, enable three things:
   back to a distance-based estimate, marked with a `≈`.
 
 - **Places API (New)**, which finds the restaurants around a block when you
-  right-click it. Note the *(New)* — the old Places API is a different entry in
-  the library and the app doesn't use it.
+  right-click it, and fills card mode's three decks. Note the *(New)* — the old
+  Places API is a different entry in the library and the app doesn't use it.
+  Enabling the legacy one instead produces the *same* "isn't enabled" message,
+  which reads as "but I already turned that on". Check which entry you enabled.
 
 Then **APIs & Services → Credentials → Create credentials → API key**.
 

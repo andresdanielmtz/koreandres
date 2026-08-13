@@ -10,8 +10,15 @@ src/
   lib/          pure functions and types, no React
   state/        the hooks that hold everything
   components/   the UI
-  styles.css    all of it, one file
+  styles.css    the board's, and every shared variable
+  cards/        card mode, the same split one level down
 ```
+
+There are two sections, switched by the rail down the far left: the board, which
+is everything below, and **card mode**, which is its own folder and its own
+stylesheet — [cards.md](cards.md) is its tour. `App.tsx` holds the switch, the
+theme and both hooks; card mode is `React.lazy`'d so a board-only session never
+downloads three.js.
 
 `lib/` has no imports from React and no side effects, so it's the easy part to
 read first. `types.ts` is the vocabulary. `constants.ts` is where the numbers
@@ -300,11 +307,13 @@ Transitions are capped at 80ms, in the `--dur` variable at the top of
 that affects position or size is ever animated. If a block eased into place
 after you dragged it, it would feel like it was lagging behind your hand.
 
-The exceptions are both cameras, and neither is holding your pointer: the map's
-flight, and the day arrows, which slide the view over `VIEW_GLIDE_MS` (170ms)
-instead of cutting. A cut the height of a whole day gives you no direction to
-read, so it lands as a jump cut rather than a move; long enough to see and short
-enough that holding the arrow down never becomes a ride.
+There are three exceptions, and none of them is holding your pointer: the map's
+flight, the day arrows, which slide the view over `VIEW_GLIDE_MS` (170ms)
+instead of cutting, and the cards in card mode. A cut the height of a whole day
+gives you no direction to read, so it lands as a jump cut rather than a move;
+long enough to see and short enough that holding the arrow down never becomes a
+ride. The first two are cameras. The third is the one place a thing moves, and
+it earns it the same way — a dealt card that teleports has not been dealt.
 
 Drags don't start until the pointer has moved 3px, so a click still reads as a
 click and doesn't nudge anything.

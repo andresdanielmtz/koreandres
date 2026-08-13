@@ -27,12 +27,24 @@ errors) and `npm run lint`, then exercise it in the browser.
 ```
 src/
   lib/          pure functions and types — no React, no side effects
-  state/        the three hooks that hold everything
+  state/        the hooks that hold everything
   components/   the UI
-  styles.css    all of it, one file (~1250 lines)
+  styles.css    the board's, and every shared variable (~1800 lines)
+  cards/        card mode — the same three-way split, one level down
 supabase/schema.sql   the tables; nothing applies this for you
-docs/                 setup.md (Supabase), architecture.md (the long tour)
+supabase/cards.sql    card mode's, standalone; nothing applies this either
+docs/                 setup.md (Supabase), architecture.md (the long tour),
+                      cards.md (card mode)
 ```
+
+**Card mode is its own folder, and its own stylesheet.** `src/cards/` repeats
+the `lib`/`state`/`components` split and owns `cards.css`, imported once from
+`CardsView.tsx` — the one place "all of it, one file" is bent, along the same
+seam the code is already split on. Everything shared still lives in
+`styles.css`: the variables, the app shell, and the left rail, which is chrome
+for both sections rather than card mode's. Read `docs/cards.md` before touching
+any of it; the Three/React seam has two rules that take the whole app down when
+broken.
 
 `docs/architecture.md` is the real explanation of the design and is worth
 reading before any non-trivial change. The rest of this file is the short list
@@ -173,10 +185,16 @@ The brief is that it should feel *clicky*, and it's mostly restraint:
 - Transitions are capped at 80ms (`--dur` at the top of `styles.css`) and apply
   only to colour, shadow and opacity.
 - **Nothing affecting position or size is ever animated.** A block easing into
-  place after a drag reads as lag. The two cameras are the exceptions — the
-  map's flight, and the board's own view when the day arrows move it for you
-  (`glideBy`, `VIEW_GLIDE_MS`). Both answer a press rather than a drag, where a
-  cut loses which way you went. Nothing the pointer is holding ever eases.
+  place after a drag reads as lag. There are three exceptions — the map's
+  flight, the board's own view when the day arrows move it for you (`glideBy`,
+  `VIEW_GLIDE_MS`), and the cards in card mode. The first two are cameras; the
+  third is the one place a *thing* moves, and it is allowed for the same reason:
+  every one of them answers a press rather than a drag, where a cut loses which
+  way you went. Nothing the pointer is holding ever eases, in either section.
+  The card exception is granted to `useCardScene.ts`, not to the stylesheet —
+  all of it is a rAF loop writing to a `CSS3DObject`, and no rule in `cards.css`
+  may name `transform`, `width`, `height`, `top` or `left` in a `transition`.
+  So a reviewer's check is a grep rather than a judgement call.
 - Flat throughout. Depth comes from 1px borders. Soft drop shadows are reserved
   for things that genuinely float (menus, tooltips); every other `box-shadow` is
   a hard selection ring.
