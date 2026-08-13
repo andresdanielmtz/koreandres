@@ -55,6 +55,15 @@ export const emptySnapshot = (): DeckSnapshot => ({
   draws: {},
 })
 
+/** One of a card's photos, at both the sizes it is shown at. `getURI` only
+ *  builds a URL — it makes no request — so asking for two costs nothing. */
+export type CardPhoto = {
+  /** For the grid on the card. */
+  thumb: string
+  /** For the same photo opened full size. */
+  full: string
+}
+
 /** Why a deck couldn't be filled. `denied` is Places API (New) not being
  *  enabled on the key — a separate enablement from the other three. */
 export type CardsError = 'denied' | 'failed'

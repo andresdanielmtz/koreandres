@@ -164,6 +164,40 @@ fix later:
 Photos are also not requested in the deck search, so a deck you never open
 photos on never pays for them.
 
+Each photo is kept at **two** URLs — `thumb` for the card's grid and `full` for
+the viewer. `getURI` only builds a URL and makes no request, so the second size
+is free; asking for one width and scaling it in CSS would either blur the viewer
+or make the card download six full-size photos.
+
+### The viewer
+
+Clicking a thumbnail opens it over everything (`PhotoLightbox`). Arrow keys and
+the chevrons step through, with wrap-around; Escape, the close button, or a
+press on the backdrop closes. A press on the photo itself does not — the handler
+only fires when the press lands on the backdrop element rather than bubbling
+from a child.
+
+Two things about it are load-bearing:
+
+- **It is portalled to `document.body`.** Rendering it where it is opened from
+  would put it inside the card, which lives in a `preserve-3d` subtree the
+  renderer writes a `matrix3d` onto — the "full size" photo would be flown
+  around with the card and clipped by the table.
+- **Both grid tracks are `minmax(0, 1fr)`, not `1fr`.** Against an auto-sized
+  track the photo's `max-height: 100%` resolves to nothing, and a tall picture
+  runs straight off the bottom of the screen. This was a real bug: a 1600×1200
+  photo rendered 1304×978 in a 900px viewport before the tracks were made
+  definite.
+
+The scrim uses two new variables in `styles.css`, `--scrim` and `--on-scrim`.
+They are the one pair that does **not** flip with the theme — a photo wants to
+be looked at, and a light backdrop around it is glare — so both themes are dark,
+the dark one just more so.
+
+The photo does not ease into place, and neither does the scrim beyond its
+colour. The card-motion exception is granted to `useCardScene`, not to card
+mode at large; the viewer is ordinary UI and obeys the ordinary rule.
+
 ## Storage
 
 `supabase/cards.sql`, run by hand, standalone — not folded into `schema.sql`,
@@ -254,8 +288,9 @@ whoever adds one. In rough order of value:
     search for a category already in flight.
 16. `useCards(false)` never resolves a store or issues a search.
 
-17. `fetchPhotos` returns `'denied'` / `'failed'` the same way, and caps at
-    `CARD_PHOTO_MAX`.
+17. `fetchPhotos` returns `'denied'` / `'failed'` the same way, caps at
+    `CARD_PHOTO_MAX`, and gives every photo both a `thumb` and a `full` URL at
+    the two configured widths.
 
 **The scene** is the least worth unit-testing and the most worth exercising in a
 browser: deal, keep, discard, a theme switch with a card on the table, a resize,
@@ -263,4 +298,7 @@ and `prefers-reduced-motion: reduce`. Assert on `.card`'s inline `transform` and
 on the card count in the DOM rather than on pixels. For the drag specifically:
 2px of pointer movement must not move the card and 3px must, the card must stay
 inside `.card-table`'s box however hard it is shoved, and Keep must still be
-visible afterwards.
+visible afterwards. For the viewer: the photo must fit inside the window at any
+viewport size (assert `getBoundingClientRect()`, not that it merely rendered), a
+press on the photo must not close it while one beside it must, and the whole
+thing must be a direct child of `<body>`.

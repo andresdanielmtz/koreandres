@@ -8,8 +8,14 @@
  * being thrown. Nothing above this has to know what a Places error looks like.
  */
 import { loadMaps, placesError } from '../../lib/maps'
-import { CARD_DECK_MAX, CARD_PHOTO_MAX, CARD_PHOTO_WIDTH, CATEGORY_TYPES } from './constants'
-import type { Card, CardCategory, CardLocation, CardsError } from './types'
+import {
+  CARD_DECK_MAX,
+  CARD_PHOTO_FULL,
+  CARD_PHOTO_MAX,
+  CARD_PHOTO_WIDTH,
+  CATEGORY_TYPES,
+} from './constants'
+import type { Card, CardCategory, CardLocation, CardPhoto, CardsError } from './types'
 
 export async function searchDeck(
   at: CardLocation,
@@ -62,14 +68,15 @@ export async function searchDeck(
  * anyway. So this is a request per card per session, cached in memory by the
  * caller, and the deck search doesn't pay for photos it may never show.
  */
-export async function fetchPhotos(placeId: string): Promise<string[] | CardsError> {
+export async function fetchPhotos(placeId: string): Promise<CardPhoto[] | CardsError> {
   try {
     await loadMaps()
     const place = new google.maps.places.Place({ id: placeId })
     await place.fetchFields({ fields: ['photos'] })
-    return (place.photos ?? [])
-      .slice(0, CARD_PHOTO_MAX)
-      .map((p) => p.getURI({ maxWidth: CARD_PHOTO_WIDTH }))
+    return (place.photos ?? []).slice(0, CARD_PHOTO_MAX).map((p) => ({
+      thumb: p.getURI({ maxWidth: CARD_PHOTO_WIDTH }),
+      full: p.getURI({ maxWidth: CARD_PHOTO_FULL }),
+    }))
   } catch (err: unknown) {
     return placesError(err, 'photos')
   }

@@ -208,12 +208,24 @@
   min-height: 0;
 }
 
+.card-strip button {
+  display: block;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  cursor: zoom-in;
+  transition: border-color var(--dur) var(--ease);
+}
+
+.card-strip button:hover {
+  border-color: var(--line-3);
+}
+
 .card-strip img {
+  display: block;
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--line);
   background: var(--surface-2);
 }
 
@@ -265,6 +277,93 @@
 .card-keep {
   border-color: var(--edge, var(--line-2));
   color: var(--ink, var(--text));
+}
+
+/* -------------------------------------------------------------- lightbox -- */
+
+/* Portalled to the body, so it is outside the renderer's preserve-3d subtree
+   and never gets a matrix3d written onto it. Above the sidenav's z-index 30 and
+   the context menu's 80. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  /* Both tracks are `minmax(0, 1fr)` rather than `1fr` so the row and column
+     are *definite*. Against an auto-sized track the photo's `max-height: 100%`
+     resolves to nothing and a tall picture runs off the screen. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 56px 20px 44px;
+  background: var(--scrim);
+  cursor: zoom-out;
+}
+
+/* The box stays the size of the picture, not the cell, so the dark either side
+   of it is backdrop and a press there closes. A small original is left small
+   rather than blown up — this is a viewer, not an upscaler. */
+.lightbox-img {
+  justify-self: center;
+  align-self: center;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  cursor: default;
+}
+
+.lightbox-close,
+.lightbox-step {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--on-scrim);
+  background: rgba(255, 255, 255, 0.1);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.lightbox-close:hover,
+.lightbox-step:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+}
+
+/* The arrows sit in the outer grid columns, so a wide photo never covers them. */
+.lightbox-step[data-side='prev'] {
+  grid-column: 1;
+}
+
+.lightbox-step[data-side='next'] {
+  grid-column: 3;
+}
+
+.lightbox-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 20px;
+  font-size: 12px;
+  color: var(--on-scrim);
+  pointer-events: none;
+}
+
+.lightbox-count {
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------ deck shelf -- */

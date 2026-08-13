@@ -56,11 +56,16 @@ export const CARD_REFETCH_METRES = 400
  *  falls through to the text field rather than hanging on the gate. */
 export const CARD_LOCATE_TIMEOUT_MS = 8000
 
-/** How many photos a card shows, and how wide they are asked for. Wider than
- *  the card so they stay sharp on a high-density screen; more than a handful
- *  is a gallery, and a card is not one. */
+/** How many photos a card shows, and how wide they are asked for. More than a
+ *  handful is a gallery, and a card is not one.
+ *
+ *  Two widths because the grid thumbnails and the same photo opened full size
+ *  are wildly different jobs, and `getURI` only builds a URL — it makes no
+ *  request — so the second one is free. Both are asked for wider than they are
+ *  drawn, for high-density screens. */
 export const CARD_PHOTO_MAX = 6
-export const CARD_PHOTO_WIDTH = 800
+export const CARD_PHOTO_WIDTH = 480
+export const CARD_PHOTO_FULL = 1600
 
 /* ---------------------------------------------------------------- motion -- */
 

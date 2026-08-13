@@ -1,13 +1,13 @@
 import { IconCards, IconExternal, IconNote } from '../../components/icons'
 import { mapsSearchUrl } from '../../lib/maps'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '../lib/constants'
-import type { Card } from '../lib/types'
+import type { Card, CardPhoto } from '../lib/types'
 
 /** What the photos for this card are doing. */
 export type PhotoState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'ready'; urls: string[] }
+  | { kind: 'ready'; photos: CardPhoto[] }
   | { kind: 'failed'; denied: boolean }
 
 type Props = {
@@ -19,6 +19,7 @@ type Props = {
   ready: boolean
   photos: PhotoState
   onPhotos: () => void
+  onOpenPhoto: (index: number) => void
   onGrab: (e: React.PointerEvent) => void
 }
 
@@ -30,7 +31,16 @@ type Props = {
  * Nothing here sets a transform or a transition on the card itself — that
  * element belongs to `CSS3DRenderer`.
  */
-export function CardFace({ card, onKeep, onDiscard, ready, photos, onPhotos, onGrab }: Props) {
+export function CardFace({
+  card,
+  onKeep,
+  onDiscard,
+  ready,
+  photos,
+  onPhotos,
+  onOpenPhoto,
+  onGrab,
+}: Props) {
   const maps = card.url || mapsSearchUrl(card.name)
 
   return (
@@ -52,10 +62,17 @@ export function CardFace({ card, onKeep, onDiscard, ready, photos, onPhotos, onG
 
         <div className="card-photos">
           {photos.kind === 'ready' &&
-            (photos.urls.length ? (
+            (photos.photos.length ? (
               <div className="card-strip">
-                {photos.urls.map((url) => (
-                  <img key={url} src={url} alt="" loading="lazy" />
+                {photos.photos.map((photo, i) => (
+                  <button
+                    key={photo.thumb}
+                    type="button"
+                    aria-label={`Open photo ${i + 1} of ${photos.photos.length}`}
+                    onClick={() => onOpenPhoto(i)}
+                  >
+                    <img src={photo.thumb} alt="" loading="lazy" />
+                  </button>
                 ))}
               </div>
             ) : (

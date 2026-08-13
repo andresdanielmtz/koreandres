@@ -7,6 +7,7 @@ import { useCardScene } from '../state/useCardScene'
 import { CardTable } from './CardTable'
 import type { PhotoState } from './CardFace'
 import { DeckShelf } from './DeckShelf'
+import { PhotoLightbox } from './PhotoLightbox'
 import { SeenDeck } from './SeenDeck'
 
 type Props = { cards: Cards }
@@ -30,6 +31,9 @@ export function CardDesk({ cards }: Props) {
      a card back and drawing it again doesn't pay twice. Not persisted: what
      `getURI` hands back is a temporary URL, see `fetchPhotos`. */
   const [photos, setPhotos] = useState<Map<string, PhotoState>>(new Map())
+  /** Which photo is open full size, if any. Lives here rather than on the card
+   *  so it outlives a re-render of the face it was opened from. */
+  const [viewing, setViewing] = useState<{ id: string; index: number } | null>(null)
   const landing = useRef(0)
 
   const byId = new Map(cards.snapshot.cards.map((c) => [c.id, c]))
@@ -58,8 +62,11 @@ export function CardDesk({ cards }: Props) {
     setPhoto(id, { kind: 'loading' })
     const found = await fetchPhotos(id)
     if (typeof found === 'string') setPhoto(id, { kind: 'failed', denied: found === 'denied' })
-    else setPhoto(id, { kind: 'ready', urls: found })
+    else setPhoto(id, { kind: 'ready', photos: found })
   }
+
+  const shown = viewing && photos.get(viewing.id)
+  const open = shown?.kind === 'ready' ? shown.photos : null
 
   /**
    * Drags the card around the table like a window. Same plumbing as the
@@ -120,12 +127,23 @@ export function CardDesk({ cards }: Props) {
           onKeep={() => answer(cards.keep, 'pile')}
           onDiscard={() => answer(cards.discard, 'deck')}
           onPhotos={(id) => void showPhotos(id)}
+          onOpenPhoto={(id, index) => setViewing({ id, index })}
           onGrab={grab}
         />
         <DeckShelf cards={cards} canDraw={!cards.drawn} onTake={take} />
       </div>
 
       <SeenDeck kept={cards.kept} />
+
+      {viewing && open && (
+        <PhotoLightbox
+          photos={open}
+          index={viewing.index}
+          title={byId.get(viewing.id)?.name ?? ''}
+          onIndex={(index) => setViewing({ ...viewing, index })}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   )
 }

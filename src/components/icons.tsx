@@ -77,6 +77,24 @@ export const IconChevron = ({ size = 14 }: Props) => (
   </svg>
 )
 
+export const IconChevronLeft = ({ size = 14 }: Props) => (
+  <svg {...base(size)}>
+    <path d="M9.75 4.5 6.25 8l3.5 3.5" strokeWidth={1.8} />
+  </svg>
+)
+
+export const IconChevronRight = ({ size = 14 }: Props) => (
+  <svg {...base(size)}>
+    <path d="M6.25 4.5 9.75 8l-3.5 3.5" strokeWidth={1.8} />
+  </svg>
+)
+
+export const IconClose = ({ size = 14 }: Props) => (
+  <svg {...base(size)}>
+    <path d="M4 4l8 8M12 4l-8 8" strokeWidth={1.6} />
+  </svg>
+)
+
 export const IconCalendar = ({ size = 14 }: Props) => (
   <svg {...base(size)}>
     <rect x="2.5" y="3.5" width="11" height="10" rx="1.8" />
