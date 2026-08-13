@@ -1,0 +1,23 @@
+version: 2
+
+updates:
+  # One PR a month with everything in it, rather than a dozen. Each one runs
+  # the four workflows, which is the whole reason to accept the noise.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      npm:
+        patterns: ['*']
+
+  # Without this the action versions pinned in .github/workflows rot quietly.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ['*']

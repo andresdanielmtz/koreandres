@@ -1,0 +1,34 @@
+name: check-env
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-env-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check-env:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # .gitignore already covers this; the guard is for the day someone
+      # commits one with -f, or lands a subdirectory the ignore rules miss.
+      # .env.example is the template and is meant to be here.
+      - name: no .env may be tracked
+        run: |
+          tracked=$(git ls-files \
+            | grep -E '(^|/)\.env($|\.)' \
+            | grep -vE '(^|/)\.env\.example$' || true)
+          if [ -n "$tracked" ]; then
+            echo "::error::a .env is tracked. Keys in git are keys to rotate:"
+            echo "$tracked"
+            exit 1
+          fi
+          echo "no .env tracked"

@@ -176,7 +176,8 @@ cleared whenever the card is sent somewhere else; the pile is a pile whatever
 route the card took there.
 
 **Nothing in `cards.css` may put a `transition` or a `transform` on `.card`.**
-That element belongs to the renderer. The flip is done with two children,
+`npm run check:motion` enforces the transition half of that, and CI runs it on
+every branch. That element belongs to the renderer. The flip is done with two children,
 `.card-face[data-side='front']` and `[data-side='back']`, the back rotated 180°
 and both with `backface-visibility: hidden`, while Three rotates the parent.
 

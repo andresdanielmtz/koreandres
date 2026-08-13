@@ -16,11 +16,13 @@ npm run dev       # Vite dev server
 npm run build     # tsc -b && vite build — the typecheck is part of the build
 npm run lint      # eslint .
 npm run preview   # serve the built bundle
+npm run check:motion   # cards.css may not transition transform or size
 ```
 
 Node 20.19+ (Vite 8). There is **no test suite** — don't claim tests pass, and
 don't invent a runner. To verify a change, run `npm run build` (catches type
-errors) and `npm run lint`, then exercise it in the browser.
+errors) and `npm run lint`, then exercise it in the browser. Those two and the
+two guards run in CI on every branch; `docs/ci.md` says what breaks them.
 
 ## Layout
 
@@ -33,8 +35,10 @@ src/
   cards/        card mode — the same three-way split, one level down
 supabase/schema.sql   the tables; nothing applies this for you
 supabase/cards.sql    card mode's, standalone; nothing applies this either
+scripts/              the checks CI runs that aren't npm's own
+.github/workflows/    one workflow per file — see docs/ci.md
 docs/                 setup.md (Supabase), architecture.md (the long tour),
-                      cards.md (card mode)
+                      cards.md (card mode), ci.md (what runs on a branch)
 ```
 
 **Card mode is its own folder, and its own stylesheet.** `src/cards/` repeats
