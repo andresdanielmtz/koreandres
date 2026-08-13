@@ -254,32 +254,15 @@
   background: var(--surface-2);
 }
 
-.card-photos-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 28px;
-  border: 1px solid var(--line-2);
-  border-radius: 7px;
-  font-size: 11.5px;
-  color: var(--text-2);
-  transition:
-    background-color var(--dur) var(--ease),
-    border-color var(--dur) var(--ease),
-    color var(--dur) var(--ease);
-}
-
-.card-photos-btn:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--hover);
-  border-color: var(--line-3);
-}
-
-.card-photos-btn:disabled {
-  color: var(--text-3);
-  border-color: var(--line);
-  cursor: default;
+/* Empty tiles standing in until the photos land, so the card doesn't reflow
+   under the pointer when they do. Flat, and it doesn't pulse — a shimmer is a
+   moving gradient, and this stylesheet has neither. */
+.card-strip[data-waiting] span {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
 }
 
 .card-note {

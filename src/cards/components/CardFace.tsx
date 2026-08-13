@@ -1,6 +1,6 @@
-import { IconCards, IconExternal, IconNote } from '../../components/icons'
+import { IconCards, IconExternal } from '../../components/icons'
 import { mapsSearchUrl } from '../../lib/maps'
-import { CATEGORY_COLOR, CATEGORY_LABEL } from '../lib/constants'
+import { CARD_PHOTO_MAX, CATEGORY_COLOR, CATEGORY_LABEL } from '../lib/constants'
 import type { Card, CardPhoto } from '../lib/types'
 
 /** What the photos for this card are doing. */
@@ -18,7 +18,6 @@ type Props = {
    *  before it has landed. */
   ready: boolean
   photos: PhotoState
-  onPhotos: () => void
   onOpenPhoto: (index: number) => void
   onGrab: (e: React.PointerEvent) => void
 }
@@ -37,7 +36,6 @@ export function CardFace({
   onDiscard,
   ready,
   photos,
-  onPhotos,
   onOpenPhoto,
   onGrab,
 }: Props) {
@@ -65,8 +63,8 @@ export function CardFace({
         </a>
 
         <div className="card-photos">
-          {photos.kind === 'ready' &&
-            (photos.photos.length ? (
+          {photos.kind === 'ready' ? (
+            photos.photos.length ? (
               <div className="card-strip">
                 {photos.photos.map((photo, i) => (
                   <button
@@ -81,26 +79,19 @@ export function CardFace({
               </div>
             ) : (
               <p className="card-note">No photos for this one.</p>
-            ))}
-
-          {photos.kind === 'failed' && (
+            )
+          ) : photos.kind === 'failed' ? (
             <p className="card-note">
-              {photos.denied
-                ? 'Photos need Places API (New) on the key.'
-                : 'Couldn’t load photos.'}
+              {photos.denied ? 'Photos need Places API (New) on the key.' : 'Couldn’t load photos.'}
             </p>
-          )}
-
-          {photos.kind !== 'ready' && (
-            <button
-              type="button"
-              className="card-photos-btn"
-              disabled={!ready || photos.kind === 'loading'}
-              onClick={onPhotos}
-            >
-              <IconNote size={12} />
-              {photos.kind === 'loading' ? 'Loading photos…' : 'Show photos'}
-            </button>
+          ) : (
+            /* Holds the grid's shape while the request is out, so the card
+               doesn't reflow under the pointer when the photos land. */
+            <div className="card-strip" data-waiting="" aria-hidden>
+              {Array.from({ length: CARD_PHOTO_MAX }, (_, i) => (
+                <span key={i} />
+              ))}
+            </div>
           )}
         </div>
 

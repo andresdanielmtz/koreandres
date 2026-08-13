@@ -54,8 +54,11 @@ export function CardDesk({ cards }: Props) {
   const setPhoto = (id: string, state: PhotoState) =>
     setPhotos((m) => new Map(m).set(id, state))
 
+  /** Fetched the moment a card is turned over. One request per place per
+   *  session — a place drawn again is already held. */
   async function showPhotos(id: string) {
-    if (photos.get(id)?.kind === 'loading') return
+    const held = photos.get(id)
+    if (held && held.kind !== 'failed') return
     setPhoto(id, { kind: 'loading' })
     const found = await fetchPhotos(id)
     if (typeof found === 'string') setPhoto(id, { kind: 'failed', denied: found === 'denied' })
@@ -87,6 +90,9 @@ export function CardDesk({ cards }: Props) {
     setShown({ slotId, card })
     setHand(null)
     setReady(false)
+    // Started with the flip rather than waited for, so the photos are usually
+    // there by the time the card lands.
+    void showPhotos(card.id)
     scene.deal(slotId)
     // The rest of the hand goes back where it came from, and out of the scene
     // once it gets there.
@@ -162,7 +168,6 @@ export function CardDesk({ cards }: Props) {
           onPick={pick}
           onKeep={() => answer(cards.keep, 'pile')}
           onDiscard={() => answer(cards.discard, 'deck')}
-          onPhotos={(id) => void showPhotos(id)}
           onOpenPhoto={(id, index) => setViewing({ id, index })}
           onGrab={grab}
         />

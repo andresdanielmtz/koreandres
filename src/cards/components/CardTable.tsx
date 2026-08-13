@@ -22,7 +22,6 @@ type Props = {
   onPick: (slotId: string) => void
   onKeep: () => void
   onDiscard: () => void
-  onPhotos: (id: string) => void
   onOpenPhoto: (id: string, index: number) => void
   onGrab: (e: React.PointerEvent, slotId: string) => void
 }
@@ -51,7 +50,6 @@ export function CardTable({
   onPick,
   onKeep,
   onDiscard,
-  onPhotos,
   onOpenPhoto,
   onGrab,
 }: Props) {
@@ -71,7 +69,6 @@ export function CardTable({
               photos={photos.get(card.id) ?? IDLE}
               onKeep={onKeep}
               onDiscard={onDiscard}
-              onPhotos={() => onPhotos(card.id)}
               onOpenPhoto={(index) => onOpenPhoto(card.id, index)}
               onGrab={(e) => onGrab(e, slot.id)}
             />

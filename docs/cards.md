@@ -178,9 +178,20 @@ when the search stops returning the place.
 
 ## Photos are not stored, and can't be
 
-`fetchPhotos` runs when **Show photos** is pressed — one `Place.fetchFields`
-request per card, held in memory for the session by `CardDesk` so putting a card
-back and drawing it again doesn't pay twice.
+`fetchPhotos` runs the moment a card is turned over — started alongside the flip
+rather than waited for, so the photos are usually there by the time the card
+lands. One `Place.fetchFields` request per **place** per session, held in memory
+by `CardDesk`, so a place drawn again is already loaded.
+
+Note the cost shape: this is a request per card revealed rather than per card
+you were curious about. The deck search still doesn't ask for photos, so filling
+a deck is unaffected; what changed is that picking a card you immediately
+discard now costs a Place Details call.
+
+While it is out, the grid renders `CARD_PHOTO_MAX` empty tiles. That is not
+decoration — it holds the card's shape so the actions don't jump when the photos
+land under the pointer. It doesn't pulse: a shimmer is a moving gradient, and
+this stylesheet has neither.
 
 They are deliberately absent from `card_places`, and this is not an oversight to
 fix later:
@@ -260,7 +271,8 @@ board table would answer "cloud" and then every card write would throw.
 | `npm run build` can't find `three/addons/...` | `@types/three` is missing. `three` ships **no** bundled `.d.ts`; the types package is mandatory, and both route `three/addons/*` → `examples/jsm/*` through their `exports` maps. |
 | Cards stutter, drift, or jump on unrelated state changes | Something gave `.card` a `transition` or a `transform`. See the two rules above. |
 | The card doesn't keep pace with the pointer when dragged | `CARD_W`/`CARD_H` have drifted from `.card` in `cards.css`, or the camera distance was changed. One world unit is one CSS pixel only while those agree. |
-| Show photos says the key isn't enabled, but the decks fill | Photos are a `fetchFields` call rather than a search. Same enablement, so this usually means a key restriction that allows Nearby Search but not Place Details. |
+| Every card says photos need the key enabled, but the decks fill | Photos are a `fetchFields` call rather than a search. Same enablement, so this usually means a key restriction that allows Nearby Search but not Place Details. |
+| Six empty tiles and nothing else | The photo request is still out, or it failed silently — check the console. The tiles are the placeholder, not a broken image. |
 | `removeChild: The node to be removed is not a child of this node`, app goes blank | React rendered a child into an element the renderer also writes to. See rule 1. |
 | The whole section says "No Google Maps key" | `VITE_GOOGLE_MAPS_API_KEY` is unset. Card mode needs it for both the search and the typed fallback's geocoder. |
 
