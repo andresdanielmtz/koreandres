@@ -19,9 +19,11 @@ import {
   loadMaps,
   mapIdFor,
   parseLatLng,
+  placesError,
   queryFor,
   usesColorScheme,
   zoomForBounds,
+  type PlacesError,
 } from '../lib/maps'
 import { estimateTrip, metresBetween, type TripEstimate } from '../lib/estimate'
 import { clamp } from '../lib/time'
@@ -71,9 +73,9 @@ export type NearbyPlace = {
   url: string
 }
 
-/** Why there is nothing around the block. `denied` is the Places API not being
- *  enabled on the key — it is a separate one from the other three. */
-export type NearbyError = 'denied' | 'failed'
+/** Why there is nothing around the block — see `placesError` in `lib/maps.ts`,
+ *  which is the one place a Places failure is classified. */
+export type NearbyError = PlacesError
 
 export type MapPlace = {
   /** Identifies the block, so a slow answer lands on the right one. */
@@ -492,15 +494,7 @@ export function useGoogleMap(
         })
         .sort((a, b) => a.metres - b.metres)
     } catch (err: unknown) {
-      // Places is a fourth API to enable, and this is what it says when it
-      // hasn't been. Everything else is worth a look in the console.
-      const reason: NearbyError = /denied|not authorized|ApiNotActivated|PERMISSION/i.test(
-        String(err),
-      )
-        ? 'denied'
-        : 'failed'
-      if (reason === 'failed') console.warn('[map] nearby search failed', err)
-      return reason
+      return placesError(err, 'nearby search')
     }
   }
 

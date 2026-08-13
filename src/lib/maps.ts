@@ -203,6 +203,23 @@ export const mapsDirectionsUrl = (from: string, to: string, mode: TravelMode) =>
   `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}` +
   `&destination=${encodeURIComponent(to)}&travelmode=${mode}`
 
+/* ---------------------------------------------------------------- places -- */
+
+/** Why a Places call came back with nothing. */
+export type PlacesError = 'denied' | 'failed'
+
+/**
+ * Places API (New) is a fourth API to enable, separate from the three the rest
+ * of the app uses, and `denied` is what it says when it hasn't been — including
+ * when the *legacy* Places API is on instead, which reads as "but I enabled
+ * that". Everything else is worth a look in the console.
+ */
+export function placesError(err: unknown, where: string): PlacesError {
+  const denied = /denied|not authorized|ApiNotActivated|PERMISSION/i.test(String(err))
+  if (!denied) console.warn(`[maps] ${where} failed`, err)
+  return denied ? 'denied' : 'failed'
+}
+
 /* ---------------------------------------------------------------- loader -- */
 
 const CALLBACK = '__koreandresMapsReady'
