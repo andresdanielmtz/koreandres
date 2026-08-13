@@ -233,8 +233,15 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     slot.lift = reducedMotion() ? 0 : (opts.lift ?? 0)
     slot.done = opts.done
 
-    if (slot.ms === 0) settle(slot)
-    else wake()
+    if (slot.ms === 0) {
+      // Nothing will start the loop, so this is the only chance to paint. A
+      // cut that never reaches the DOM leaves the card wherever it was, and
+      // with motion reduced that is every move.
+      settle(slot)
+      render()
+    } else {
+      wake()
+    }
   }
 
   /** Deck to table, turning face up on the way. */
