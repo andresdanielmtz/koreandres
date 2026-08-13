@@ -1,0 +1,368 @@
+/* =========================================================================
+   Card mode.
+   Its own stylesheet because card mode is its own folder — the one place the
+   project's "all of it, one file" rule is bent, and only along the same seam
+   the code is already split on. Everything here still reads the variables
+   declared in styles.css; nothing redeclares a colour.
+
+   The rule that matters: `.card` belongs to CSS3DRenderer, which writes a
+   matrix3d onto it every frame. No rule below may give `.card` a `transform`
+   or a `transition` — see src/cards/state/useCardScene.ts. Everything that is
+   not a card obeys the usual --dur budget: colour, shadow and opacity only.
+   ========================================================================= */
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.cards-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  height: 46px;
+  padding: 0 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.cards-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.cards-where strong {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cards-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------ card table -- */
+
+/* The div CSS3DRenderer owns. React puts nothing in here; the scene appends
+   its own layer on mount and takes it away on unmount. */
+.card-table {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.card-table-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 32px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ card -- */
+
+.card {
+  width: 248px;
+  height: 344px;
+  /* The two faces are rotated relative to this one, so it has to keep depth. */
+  transform-style: preserve-3d;
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 18px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--edge, var(--line-2));
+  background: var(--fill, var(--surface));
+  /* A card in the air genuinely floats, which is what the soft shadow is for. */
+  box-shadow: var(--shadow);
+  backface-visibility: hidden;
+}
+
+.card-face[data-side='back'] {
+  display: grid;
+  place-items: center;
+  transform: rotateY(180deg);
+  border-color: var(--line-2);
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+.card-kind {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink, var(--text-2));
+}
+
+.card-name {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+.card-where {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.card-actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.card-keep {
+  border-color: var(--edge, var(--line-2));
+  color: var(--ink, var(--text));
+}
+
+/* ------------------------------------------------------------ deck shelf -- */
+
+.deck-shelf {
+  display: flex;
+  gap: 8px;
+  flex: none;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.deck {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.deck-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.deck-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deck-count {
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-take {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--text);
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.deck-take:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--line-3);
+}
+
+.deck-take:active:not(:disabled) {
+  background: var(--active);
+}
+
+.deck-take:disabled {
+  color: var(--text-3);
+  border-color: var(--line);
+  cursor: default;
+}
+
+.deck-note {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+.deck[data-error] .deck-note {
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------------- seen deck -- */
+
+.seen-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+  width: 232px;
+  padding: 12px 14px;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  overflow-y: auto;
+}
+
+.seen-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.seen-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seen-list a {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.seen-list a:hover {
+  background: var(--hover);
+}
+
+.seen-name {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.seen-where {
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seen-none {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+/* --------------------------------------------------------- location gate -- */
+
+.gate {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  padding: 32px;
+}
+
+.gate-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 380px;
+}
+
+.gate h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.gate p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.gate-form {
+  display: flex;
+  gap: 6px;
+}
+
+.gate-form input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--surface);
+  transition: border-color var(--dur) var(--ease);
+}
+
+.gate-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.gate-note {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.gate-note[data-error] {
+  color: var(--danger);
+}
+
+.gate-sep {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}

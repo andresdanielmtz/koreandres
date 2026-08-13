@@ -1136,9 +1136,12 @@ kbd {
   --c: #64748b;
 }
 
+/* `.card-face` is card mode's, but the derivation stays here with the palette
+   it derives from — a deck is tinted by the same eight names a block is. */
 .tblock,
 .cblock,
-.link {
+.link,
+.card-face {
   --fill: color-mix(in srgb, var(--c) var(--tint), var(--surface));
   --edge: color-mix(in srgb, var(--c) var(--edge-a), transparent);
   --ink: color-mix(in srgb, var(--c) var(--ink-mix), var(--ink-base));
