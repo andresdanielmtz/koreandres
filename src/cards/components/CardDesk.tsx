@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CARD_DEAL_MS, CARD_FLIP_MS, CARD_STACK_SHOWN } from '../lib/constants'
+import { CARD_DEAL_MS, CARD_FAN_COUNT, CARD_FLIP_MS, CARD_STACK_SHOWN } from '../lib/constants'
 import { fetchPhotos } from '../lib/places'
 import type { Card, CardCategory } from '../lib/types'
 import type { Cards } from '../state/useCards'
@@ -12,6 +12,9 @@ import { SeenDeck } from './SeenDeck'
 
 type Props = { cards: Cards }
 
+/** A hand of face-down cards waiting to be picked from. */
+type Hand = { category: CardCategory; ids: string[] }
+
 /**
  * The table itself, mounted only once there is a location to deal around.
  *
@@ -20,6 +23,10 @@ type Props = { cards: Cards }
  * render of whatever calls it. Gating inside this component instead — an early
  * return for the location prompt — would run the build effect against a null
  * ref, and with no dependencies it would never get a second chance.
+ *
+ * Scene slots are keyed by a *slot* id rather than a place id, because the
+ * face-down cards in a hand have no place behind them yet. Which card you drew
+ * is decided at the moment you pick one, not when the hand is dealt.
  */
 export function CardDesk({ cards }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -27,32 +34,22 @@ export function CardDesk({ cards }: Props) {
   /** The drawn card can only be answered once it has landed. */
   const [ready, setReady] = useState(false)
   const [dragging, setDragging] = useState(false)
-  /* Photos are a request per card, so they are held for the session — putting
+  const [hand, setHand] = useState<Hand | null>(null)
+  /** The slot that was picked, and what turned out to be on it. */
+  const [shown, setShown] = useState<{ slotId: string; card: Card } | null>(null)
+  /* Photos are a request per place, so they are held for the session — putting
      a card back and drawing it again doesn't pay twice. Not persisted: what
      `getURI` hands back is a temporary URL, see `fetchPhotos`. */
   const [photos, setPhotos] = useState<Map<string, PhotoState>>(new Map())
-  /** Which photo is open full size, if any. Lives here rather than on the card
-   *  so it outlives a re-render of the face it was opened from. */
   const [viewing, setViewing] = useState<{ id: string; index: number } | null>(null)
   const landing = useRef(0)
-
-  const byId = new Map(cards.snapshot.cards.map((c) => [c.id, c]))
+  /** Slot ids have to be fresh each round, or React reuses the last hand's. */
+  const round = useRef(0)
 
   useEffect(() => () => window.clearTimeout(landing.current), [])
 
-  // A card is only in the scene while it is being looked at. The decks and the
-  // seen pile are counts and a list, not stacks of objects — there is no reason
-  // to build twenty elements to deal one of them.
-  function take(category: CardCategory) {
-    const card = cards.draw(category)
-    if (!card) return
-    setReady(false)
-    scene.add(card.id, 'deck')
-    // One frame, so the object exists at the deck before it is told to leave.
-    requestAnimationFrame(() => scene.deal(card.id))
-    window.clearTimeout(landing.current)
-    landing.current = window.setTimeout(() => setReady(true), CARD_DEAL_MS + CARD_FLIP_MS)
-  }
+  const faces = new Map<string, Card>()
+  if (shown) faces.set(shown.slotId, shown.card)
 
   const setPhoto = (id: string, state: PhotoState) =>
     setPhotos((m) => new Map(m).set(id, state))
@@ -65,13 +62,60 @@ export function CardDesk({ cards }: Props) {
     else setPhoto(id, { kind: 'ready', photos: found })
   }
 
-  const shown = viewing && photos.get(viewing.id)
-  const open = shown?.kind === 'ready' ? shown.photos : null
+  const openPhotos = viewing && photos.get(viewing.id)
+  const open = openPhotos?.kind === 'ready' ? openPhotos.photos : null
+
+  /* ---------------------------------------------------------- the round -- */
+
+  /** Deals a hand out of a deck. Nothing is drawn yet — these are backs. */
+  function take(category: CardCategory) {
+    if (hand || shown) return
+    const n = Math.min(CARD_FAN_COUNT, cards.deckSize(category))
+    if (!n) return
+    round.current += 1
+    const ids = Array.from({ length: n }, (_, i) => `hand${round.current}:${i}`)
+    scene.fanOut(ids)
+    setHand({ category, ids })
+  }
+
+  /** Turns the picked card over. This is where the deck is actually drawn. */
+  function pick(slotId: string) {
+    if (!hand || shown) return
+    const card = cards.draw(hand.category)
+    if (!card) return
+
+    setShown({ slotId, card })
+    setHand(null)
+    setReady(false)
+    scene.deal(slotId)
+    // The rest of the hand goes back where it came from, and out of the scene
+    // once it gets there.
+    for (const id of hand.ids) {
+      if (id !== slotId) scene.toDeck(id, () => scene.remove(id))
+    }
+    window.clearTimeout(landing.current)
+    landing.current = window.setTimeout(() => setReady(true), CARD_DEAL_MS + CARD_FLIP_MS)
+  }
+
+  function answer(resolve: () => Card | null, to: 'pile' | 'deck') {
+    if (!shown) return
+    const slotId = shown.slotId
+    if (!resolve()) return
+    setReady(false)
+    setShown(null)
+    const done = () => scene.remove(slotId)
+    if (to === 'pile') scene.toPile(slotId, Math.min(cards.kept.length, CARD_STACK_SHOWN), done)
+    else scene.toDeck(slotId, done)
+  }
 
   /**
    * Drags the card around the table like a window. Same plumbing as the
    * board's `startDrag`: window listeners, and nothing moves until the pointer
    * clears 3px, so a click on the card stays a click.
+   *
+   * The whole face is a handle, so anything that answers a press of its own is
+   * excluded here rather than by where the listener sits — otherwise pressing
+   * Keep would also start a drag, and a photo could never be opened.
    *
    * Deltas are cumulative from the grab, added to where the card already was,
    * which is why a drag can't accumulate rounding. One CSS pixel is one world
@@ -80,6 +124,7 @@ export function CardDesk({ cards }: Props) {
    */
   function grab(e: React.PointerEvent, id: string) {
     if (e.button !== 0) return
+    if ((e.target as HTMLElement).closest('button, a, input')) return
     const startX = e.clientX
     const startY = e.clientY
     const from = scene.offsetOf(id)
@@ -104,33 +149,29 @@ export function CardDesk({ cards }: Props) {
     window.addEventListener('pointercancel', end)
   }
 
-  function answer(resolve: () => Card | null, to: 'pile' | 'deck') {
-    const card = resolve()
-    if (!card) return
-    setReady(false)
-    const done = () => scene.remove(card.id)
-    if (to === 'pile') scene.toPile(card.id, Math.min(cards.kept.length, CARD_STACK_SHOWN), done)
-    else scene.toDeck(card.id, done)
-  }
-
   return (
     <div className="cards-body" data-dragging={dragging ? '' : undefined}>
       <div className="cards-main">
         <CardTable
           hostRef={hostRef}
           mounted={scene.mounted}
-          cards={byId}
-          drawn={cards.drawn?.id ?? null}
+          faces={faces}
+          photos={photos}
           ready={ready}
           empty="Take a card from one of the decks below."
-          photos={photos}
+          onPick={pick}
           onKeep={() => answer(cards.keep, 'pile')}
           onDiscard={() => answer(cards.discard, 'deck')}
           onPhotos={(id) => void showPhotos(id)}
           onOpenPhoto={(id, index) => setViewing({ id, index })}
           onGrab={grab}
         />
-        <DeckShelf cards={cards} canDraw={!cards.drawn} onTake={take} />
+        <DeckShelf
+          cards={cards}
+          canDraw={!hand && !shown}
+          picking={hand?.category ?? null}
+          onTake={take}
+        />
       </div>
 
       <SeenDeck kept={cards.kept} />
@@ -139,7 +180,7 @@ export function CardDesk({ cards }: Props) {
         <PhotoLightbox
           photos={open}
           index={viewing.index}
-          title={byId.get(viewing.id)?.name ?? ''}
+          title={shown?.card.name ?? ''}
           onIndex={(index) => setViewing({ ...viewing, index })}
           onClose={() => setViewing(null)}
         />

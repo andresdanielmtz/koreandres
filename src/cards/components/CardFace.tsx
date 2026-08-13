@@ -45,11 +45,15 @@ export function CardFace({
 
   return (
     <>
-      <div className="card-face" data-side="front" data-color={CATEGORY_COLOR[card.category]}>
-        {/* The whole head is the drag handle, the way a window's title bar is.
-            The buttons and the link below it are not, so a click on them still
-            reads as a click. */}
-        <div className="card-grip" onPointerDown={onGrab}>
+      {/* The whole face drags. `onGrab` bails on anything interactive, so the
+          buttons, the link and the photos still answer a click themselves. */}
+      <div
+        className="card-face"
+        data-side="front"
+        data-color={CATEGORY_COLOR[card.category]}
+        onPointerDown={onGrab}
+      >
+        <div className="card-head">
           <span className="card-kind">{CATEGORY_LABEL[card.category]}</span>
           <span className="card-name">{card.name}</span>
           <span className="card-where">{card.where}</span>
@@ -116,3 +120,4 @@ export function CardFace({
     </>
   )
 }
+

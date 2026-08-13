@@ -26,6 +26,11 @@ import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer
 import { clamp } from '../../lib/time'
 import {
   CARD_DEAL_MS,
+  CARD_FAN_ARC,
+  CARD_FAN_SCALE,
+  CARD_FAN_SPREAD,
+  CARD_FAN_STAGGER,
+  CARD_FAN_TILT,
   CARD_FLIP_MS,
   CARD_FOV,
   CARD_H,
@@ -36,8 +41,12 @@ import {
   CARD_W,
 } from '../lib/constants'
 
-/** The three places a card can be. */
-export type CardPlace = 'deck' | 'table' | 'pile'
+/** The three anchors the table is laid out around. */
+type Anchor = 'deck' | 'table' | 'pile'
+
+/** Where a card can be. `fan` is the spread of face-down cards offered to pick
+ *  from; it is derived from the table anchor rather than being one itself. */
+export type CardPlace = Anchor | 'fan'
 
 /** Where a card is headed, in world units — which are CSS pixels here. */
 type Pose = {
@@ -46,6 +55,8 @@ type Pose = {
   z: number
   /** Radians about Y. π is face-down. */
   turn: number
+  /** Radians about Z — the lean of a card in a fanned hand. */
+  tilt: number
   scale: number
 }
 
@@ -56,6 +67,9 @@ type Slot = {
   /** Kept so a resize can re-derive the target from the new anchors. */
   place: CardPlace
   depth: number
+  /** Which of how many, when the place is `fan`. */
+  fanIndex: number
+  fanCount: number
   /** Where a drag has pushed it, relative to its anchor. Survives a resize —
    *  a window you moved stays where you put it — and is cleared the moment the
    *  card is sent somewhere else. */
@@ -70,7 +84,15 @@ type Slot = {
   done?: () => void
 }
 
-const pose = (p: Partial<Pose>): Pose => ({ x: 0, y: 0, z: 0, turn: 0, scale: 1, ...p })
+const pose = (p: Partial<Pose>): Pose => ({
+  x: 0,
+  y: 0,
+  z: 0,
+  turn: 0,
+  tilt: 0,
+  scale: 1,
+  ...p,
+})
 
 /** Decelerating: leaves at the speed of the press and arrives settled — the
  *  same curve the board's day arrows glide on. */
@@ -85,7 +107,7 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
   const cameraRef = useRef<PerspectiveCamera | null>(null)
   const rendererRef = useRef<CSS3DRenderer | null>(null)
   const slotsRef = useRef(new Map<string, Slot>())
-  const anchorsRef = useRef<Record<CardPlace, Pose>>({
+  const anchorsRef = useRef<Record<Anchor, Pose>>({
     deck: pose({}),
     table: pose({}),
     pile: pose({}),
@@ -104,15 +126,37 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     if (scene && camera && renderer) renderer.render(scene, camera)
   }
 
-  /** Where a place puts a card, with its depth in the stack and any drag it
-   *  has been given folded in. */
-  function poseFor(place: CardPlace, depth: number, offset = { x: 0, y: 0 }): Pose {
-    const a = anchorsRef.current[place]
+  /** The anchor a place hangs off. The fan is laid out around the table. */
+  const anchorFor = (place: CardPlace): Pose =>
+    anchorsRef.current[place === 'fan' ? 'table' : place]
+
+  /**
+   * Where a slot's card belongs, with its stack depth or fan position and any
+   * drag it has been given folded in.
+   *
+   * A fanned card is face-down and leans away from the middle of the hand, and
+   * the inner ones sit a little higher — the shape a fanned hand makes. Cards
+   * later in the fan sit in front, so the overlap reads left to right.
+   */
+  function poseFor(slot: Slot, place = slot.place): Pose {
+    const a = anchorFor(place)
+    if (place === 'fan') {
+      const mid = (slot.fanCount - 1) / 2
+      const step = slot.fanIndex - mid
+      return pose({
+        x: a.x + step * CARD_FAN_SPREAD + slot.offset.x,
+        y: a.y - Math.abs(step) * CARD_FAN_ARC + slot.offset.y,
+        z: a.z + slot.fanIndex * CARD_STACK_STEP,
+        turn: Math.PI,
+        tilt: -step * CARD_FAN_TILT,
+        scale: CARD_FAN_SCALE,
+      })
+    }
     return {
       ...a,
-      x: a.x + offset.x,
-      y: a.y + depth * CARD_STACK_STEP + offset.y,
-      z: a.z + depth * CARD_STACK_STEP,
+      x: a.x + slot.offset.x,
+      y: a.y + slot.depth * CARD_STACK_STEP + slot.offset.y,
+      z: a.z + slot.depth * CARD_STACK_STEP,
     }
   }
 
@@ -121,12 +165,14 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     y: slot.object.position.y,
     z: slot.object.position.z,
     turn: slot.object.rotation.y,
+    tilt: slot.object.rotation.z,
     scale: slot.object.scale.x,
   })
 
   function write(slot: Slot, at: Pose) {
     slot.object.position.set(at.x, at.y, at.z)
     slot.object.rotation.y = at.turn
+    slot.object.rotation.z = at.tilt
     slot.object.scale.set(at.scale, at.scale, at.scale)
   }
 
@@ -161,6 +207,7 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
         // The arc: a dealt card passes over the pile rather than through it.
         z: lerp(slot.from.z, slot.to.z, k) + Math.sin(raw * Math.PI) * slot.lift,
         turn: lerp(slot.from.turn, slot.to.turn, k),
+        tilt: lerp(slot.from.tilt, slot.to.tilt, k),
         scale: lerp(slot.from.scale, slot.to.scale, k),
       })
 
@@ -210,7 +257,7 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
   /* ----------------------------------------------------------- commands -- */
 
   /** Puts a card in the scene if it isn't already, parked at `place`. */
-  function add(id: string, place: CardPlace, depth = 0) {
+  function add(id: string, place: CardPlace, opts: { fanIndex?: number; fanCount?: number } = {}) {
     const scene = sceneRef.current
     if (!scene || slotsRef.current.has(id)) return
 
@@ -218,7 +265,6 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     const el = document.createElement('div')
     el.className = 'card'
     const object = new CSS3DObject(el)
-    const at = poseFor(place, depth)
     scene.add(object)
 
     const slot: Slot = {
@@ -226,14 +272,19 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
       el,
       object,
       place,
-      depth,
+      depth: 0,
+      fanIndex: opts.fanIndex ?? 0,
+      fanCount: opts.fanCount ?? 1,
       offset: { x: 0, y: 0 },
-      from: at,
-      to: at,
+      from: pose({}),
+      to: pose({}),
       t: 0,
       ms: 0,
       lift: 0,
     }
+    const at = poseFor(slot)
+    slot.from = at
+    slot.to = at
     write(slot, at)
     slotsRef.current.set(id, slot)
     setMounted((m) => [...m, { id, el }])
@@ -253,7 +304,7 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     // a pile whatever route the card took to reach it.
     slot.offset = { x: 0, y: 0 }
     slot.from = current(slot)
-    slot.to = poseFor(place, slot.depth)
+    slot.to = poseFor(slot)
     slot.t = 0
     slot.ms = reducedMotion() ? 0 : opts.ms
     slot.lift = reducedMotion() ? 0 : (opts.lift ?? 0)
@@ -268,6 +319,23 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     } else {
       wake()
     }
+  }
+
+  /**
+   * Deals a hand of face-down cards out of the deck to be picked from.
+   *
+   * Each is given a longer flight than the one before it rather than a delay:
+   * with a decelerating curve that lands them in turn, which is what a dealt
+   * hand looks like, and it needs no timers to cancel.
+   */
+  function fanOut(ids: string[]) {
+    ids.forEach((id, i) => add(id, 'deck', { fanIndex: i, fanCount: ids.length }))
+    // A frame, so every card exists at the deck before any is told to leave.
+    requestAnimationFrame(() => {
+      ids.forEach((id, i) =>
+        move(id, 'fan', { ms: CARD_DEAL_MS + i * CARD_FAN_STAGGER, lift: CARD_LIFT * 0.5 }),
+      )
+    })
   }
 
   /** Deck to table, turning face up on the way. */
@@ -289,7 +357,7 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
   function onTable(slot: Slot, want: { x: number; y: number }) {
     const host = hostRef.current
     if (!host) return want
-    const anchor = anchorsRef.current[slot.place]
+    const anchor = anchorFor(slot.place)
     const limitX = Math.max(0, (host.clientWidth - CARD_W) / 2)
     const limitY = Math.max(0, (host.clientHeight - CARD_H) / 2)
     return {
@@ -315,7 +383,7 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     const slot = slotsRef.current.get(id)
     if (!slot) return
     slot.offset = onTable(slot, { x, y })
-    slot.to = poseFor(slot.place, slot.depth, slot.offset)
+    slot.to = poseFor(slot)
     slot.from = slot.to
     slot.t = slot.ms
     slot.done = undefined
@@ -369,7 +437,7 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
         if (slot.t < slot.ms) continue
         // A drag that was on the table at the old size may not be at this one.
         slot.offset = onTable(slot, slot.offset)
-        slot.to = poseFor(slot.place, slot.depth, slot.offset)
+        slot.to = poseFor(slot)
         settle(slot)
       }
       render()
@@ -397,5 +465,5 @@ export function useCardScene(hostRef: React.RefObject<HTMLElement | null>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return { mounted, add, deal, toPile, toDeck, dragTo, offsetOf, remove }
+  return { mounted, add, fanOut, deal, toPile, toDeck, dragTo, offsetOf, remove }
 }

@@ -116,11 +116,10 @@
   backface-visibility: hidden;
 }
 
-/* The head doubles as the drag handle, the way a window's title bar does. */
-.card-grip {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+/* The whole front is the drag handle, the way a window is dragged by more than
+   its title bar. `grab` in CardDesk bails on anything interactive, so the
+   buttons, the link and the photos still answer a press of their own. */
+.card-face[data-side='front'] {
   cursor: grab;
   /* The card is being moved by a transform; letting the pointer select the
      name mid-drag turns a move into a text selection. */
@@ -128,7 +127,7 @@
   touch-action: none;
 }
 
-.cards-body[data-dragging] .card-grip {
+.cards-body[data-dragging] .card-face[data-side='front'] {
   cursor: grabbing;
 }
 
@@ -138,6 +137,18 @@
   user-select: none;
 }
 
+/* The parts that answer a press themselves take the pointer back. */
+.card-face button,
+.card-face a {
+  cursor: pointer;
+}
+
+.card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 .card-face[data-side='back'] {
   display: grid;
   place-items: center;
@@ -145,6 +156,20 @@
   border-color: var(--line-2);
   background: var(--surface-2);
   color: var(--text-3);
+  transition:
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+/* One of a hand waiting to be picked. Only colour answers the hover — a card
+   rising to meet the pointer would be animating position. */
+.card-face[data-side='back']:not(:disabled) {
+  cursor: pointer;
+}
+
+.card-face[data-side='back']:not(:disabled):hover {
+  border-color: var(--line-3);
+  color: var(--text-2);
 }
 
 .card-kind {
@@ -545,6 +570,13 @@
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--text-2);
+}
+
+/* The gate's buttons stack full width, so the shared `.btn` needs centring
+   and a little more height than it has in a toolbar. */
+.gate .btn {
+  height: 30px;
+  justify-content: center;
 }
 
 .gate-form {

@@ -34,6 +34,28 @@ be backwards. `src/lib/section.ts` is the same. And the `--fill`/`--edge`/`--ink
 derivation for `.card-face` stays in `styles.css` next to the palette it derives
 from — a deck is tinted by the same eight colour names a block is.
 
+## A round
+
+Pressing **Take one** does not draw anything. It deals a hand of
+`CARD_FAN_COUNT` face-down cards out of that deck, fanned across the table.
+Picking one of them is what draws: the card flips over on its way to the middle
+and the rest go back to the deck.
+
+The four backs are **not** four candidates. Only the back is rendered for them —
+no front at all — so nothing about a place you haven't turned over is sitting in
+the DOM. Which card you got is decided at the instant you pick, by the same
+`takeOne` as before.
+
+That is why the scene is keyed by **slot** ids (`hand3:0`) rather than place
+ids: a face-down card has no place behind it yet. `CardDesk` holds a
+`faces: Map<slotId, Card>` with exactly one entry — the picked slot — and
+`CardTable` renders a `CardFace` for anything in it and a `CardBack` for
+everything else. The round counter in the slot id matters: reusing `hand:0`
+between rounds would let React match the new hand's portals to the old one's.
+
+Photos stay keyed by **place** id, because they belong to the place rather than
+to the slot it happened to be dealt into.
+
 ## The deck machine
 
 State is **one map, not four piles**: `states` is card id → `'deck' | 'kept'`,
@@ -42,7 +64,8 @@ derivation, which is also one row per card in the database.
 
 | Move | What changes |
 | --- | --- |
-| **take one** | `draws[id]` goes up by one. The card is *not* removed from the deck. |
+| **take one** | Nothing. A hand of backs is dealt; no card has been drawn yet. |
+| **pick** | `draws[id]` goes up by one. The card is *not* removed from the deck. |
 | **keep** | `states[id] = 'kept'`. It leaves its deck and appears in Seen. |
 | **discard** | Nothing. It was never taken out. |
 
@@ -105,11 +128,20 @@ has no dependencies, so the host div must exist on its very first render. An
 early return in front of the host — the location gate — leaves the effect with a
 null ref and no second chance.
 
+The fan is laid out by `poseFor` from the **table** anchor rather than being an
+anchor of its own: cards step sideways by `CARD_FAN_SPREAD`, the inner ones ride
+`CARD_FAN_ARC` higher, and each leans `CARD_FAN_TILT` away from the middle —
+which is why a pose carries a `tilt` (Z) as well as a `turn` (Y). Each card is
+given a *longer flight* than the one before rather than a delay: with a
+decelerating curve they land in turn, which is what a dealt hand looks like, and
+it needs no timers to cancel.
+
 ### Dragging
 
-The card's head (`.card-grip`) is a drag handle, the way a window's title bar
-is. The buttons and the Maps link below it are not, so a click on them stays a
-click.
+The whole front of the card is a drag handle. `grab` bails when the press lands
+on a `button`, `a` or `input` — checked with `closest()` rather than by where
+the listener sits — so Keep, Discard, the Maps link and the photos all still
+answer a press of their own without starting a drag.
 
 It reuses the board's plumbing exactly — window listeners, and nothing moves
 until the pointer clears **3px** of Manhattan distance. Deltas are cumulative
@@ -281,7 +313,8 @@ whoever adds one. In rough order of value:
 
 **`state/useCards.ts`** — needs a React test renderer.
 
-13. `draw` is a no-op while a card is already drawn.
+13. `draw` is a no-op while a card is already drawn — and `take` is a no-op
+    while a hand is already out, so a round can't be started twice.
 14. `keep` sets `'kept'` and the card leaves `deckSize`; `discard` leaves
     `deckSize` unchanged.
 15. `fill` does not search when `isStale` is false, and does not issue a second
@@ -296,9 +329,12 @@ whoever adds one. In rough order of value:
 browser: deal, keep, discard, a theme switch with a card on the table, a resize,
 and `prefers-reduced-motion: reduce`. Assert on `.card`'s inline `transform` and
 on the card count in the DOM rather than on pixels. For the drag specifically:
-2px of pointer movement must not move the card and 3px must, the card must stay
-inside `.card-table`'s box however hard it is shoved, and Keep must still be
-visible afterwards. For the viewer: the photo must fit inside the window at any
+2px of pointer movement must not move the card and 3px must, a press on Keep
+must not drag it, the card must stay inside `.card-table`'s box however hard it
+is shoved, and Keep must still be visible afterwards. For a round: the hand is
+all backs with no `.card-face[data-side='front']` in the DOM at all, the deck's
+count does not move until a card is picked, and a second round's cards get
+different slot ids from the first's. For the viewer: the photo must fit inside the window at any
 viewport size (assert `getBoundingClientRect()`, not that it merely rendered), a
 press on the photo must not close it while one beside it must, and the whole
 thing must be a direct child of `<body>`.

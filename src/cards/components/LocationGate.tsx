@@ -29,7 +29,7 @@ export function LocationGate({ cards }: Props) {
 
         <button
           type="button"
-          className="deck-take"
+          className="btn"
           disabled={cards.locating}
           onClick={() => void cards.locateWith(deviceLocation)}
         >
@@ -52,7 +52,7 @@ export function LocationGate({ cards }: Props) {
             aria-label="Where you are"
             onChange={(e) => setText(e.target.value)}
           />
-          <button type="submit" className="deck-take" disabled={!text.trim() || cards.locating}>
+          <button type="submit" className="btn" disabled={!text.trim() || cards.locating}>
             Set
           </button>
         </form>

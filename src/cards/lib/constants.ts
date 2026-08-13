@@ -94,5 +94,25 @@ export const CARD_RETURN_MS = 260
  *  dealt card passes over the pile rather than through it. */
 export const CARD_LIFT = 190
 
+/* ------------------------------------------------------------------- fan -- */
+
+/** How many face-down cards are offered to pick from. Four is enough to feel
+ *  like a choice and few enough that they all fit without stacking. */
+export const CARD_FAN_COUNT = 4
+
+/** Small enough that four sit side by side, big enough to read as cards. The
+ *  one you pick grows to full size on its way to the middle. */
+export const CARD_FAN_SCALE = 0.62
+
+/** Between the centres of two fanned cards, how far the middle pair rise above
+ *  the outer ones, and how far each leans — a hand held in one hand. */
+export const CARD_FAN_SPREAD = 172
+export const CARD_FAN_ARC = 16
+export const CARD_FAN_TILT = 0.055
+
+/** Added to each card's flight in turn, so the fan is dealt rather than
+ *  appearing all at once. */
+export const CARD_FAN_STAGGER = 55
+
 /** Below this, a tween is close enough to be done. In pixels. */
 export const CARD_EPSILON = 0.4

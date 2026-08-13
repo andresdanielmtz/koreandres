@@ -13,13 +13,15 @@ const TROUBLE: Record<CardsError, string> = {
 
 type Props = {
   cards: Cards
-  /** False while a card is on the table — one at a time is what makes keep and
-   *  discard unambiguous. */
+  /** False while a hand is out or a card is on the table — one round at a time
+   *  is what makes keep and discard unambiguous. */
   canDraw: boolean
+  /** Which deck has a hand out, if any — only that one says so. */
+  picking: CardCategory | null
   onTake: (category: CardCategory) => void
 }
 
-export function DeckShelf({ cards, canDraw, onTake }: Props) {
+export function DeckShelf({ cards, canDraw, picking, onTake }: Props) {
   return (
     <div className="deck-shelf">
       {CARD_CATEGORIES.map((category) => {
@@ -46,7 +48,7 @@ export function DeckShelf({ cards, canDraw, onTake }: Props) {
               onClick={() => onTake(category)}
             >
               <IconCards size={14} />
-              Take one
+              {picking === category ? 'Pick one' : 'Take one'}
             </button>
 
             {error ? (

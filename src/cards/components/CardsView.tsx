@@ -38,7 +38,7 @@ export function CardsView({ cards }: Props) {
             <span className="cards-where">
               Around <strong>{cards.snapshot.location.label}</strong>
             </span>
-            <button type="button" className="deck-take" onClick={cards.clearLocation}>
+            <button type="button" className="btn" onClick={cards.clearLocation}>
               Somewhere else
             </button>
           </div>

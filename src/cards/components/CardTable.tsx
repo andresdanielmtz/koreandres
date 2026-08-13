@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
 import type { Card } from '../lib/types'
+import { CardBack } from './CardBack'
 import { CardFace, type PhotoState } from './CardFace'
 
 const IDLE: PhotoState = { kind: 'idle' }
@@ -11,18 +12,19 @@ type Props = {
   hostRef: React.RefObject<HTMLDivElement | null>
   /** The scene's portal targets: one element per card with an object in it. */
   mounted: { id: string; el: HTMLElement }[]
-  cards: Map<string, Card>
-  drawn: string | null
-  /** True once the drawn card has landed, which is when it can be answered. */
+  /** What each slot is showing. A slot with no card is still face down. */
+  faces: Map<string, Card>
+  /** Photos per *place* id — they belong to the place, not to the slot. */
+  photos: Map<string, PhotoState>
+  /** True once the revealed card has landed, which is when it can be answered. */
   ready: boolean
   empty: React.ReactNode
-  /** Photos per card id, so a card put back and drawn again keeps them. */
-  photos: Map<string, PhotoState>
+  onPick: (slotId: string) => void
   onKeep: () => void
   onDiscard: () => void
   onPhotos: (id: string) => void
   onOpenPhoto: (id: string, index: number) => void
-  onGrab: (e: React.PointerEvent, id: string) => void
+  onGrab: (e: React.PointerEvent, slotId: string) => void
 }
 
 /**
@@ -42,11 +44,11 @@ type Props = {
 export function CardTable({
   hostRef,
   mounted,
-  cards,
-  drawn,
+  faces,
+  photos,
   ready,
   empty,
-  photos,
+  onPick,
   onKeep,
   onDiscard,
   onPhotos,
@@ -59,20 +61,26 @@ export function CardTable({
 
       {!mounted.length && <div className="card-table-empty">{empty}</div>}
 
-      {mounted.map((slot) => {
-        const card = cards.get(slot.id)
-        if (!card) return null
+      {mounted.map((slot, i) => {
+        const card = faces.get(slot.id)
         return createPortal(
-          <CardFace
-            card={card}
-            ready={ready && drawn === slot.id}
-            photos={photos.get(slot.id) ?? IDLE}
-            onKeep={onKeep}
-            onDiscard={onDiscard}
-            onPhotos={() => onPhotos(slot.id)}
-            onOpenPhoto={(i) => onOpenPhoto(slot.id, i)}
-            onGrab={(e) => onGrab(e, slot.id)}
-          />,
+          card ? (
+            <CardFace
+              card={card}
+              ready={ready}
+              photos={photos.get(card.id) ?? IDLE}
+              onKeep={onKeep}
+              onDiscard={onDiscard}
+              onPhotos={() => onPhotos(card.id)}
+              onOpenPhoto={(index) => onOpenPhoto(card.id, index)}
+              onGrab={(e) => onGrab(e, slot.id)}
+            />
+          ) : (
+            <CardBack
+              label={`Take this card (${i + 1} of ${mounted.length})`}
+              onPick={() => onPick(slot.id)}
+            />
+          ),
           slot.el,
           slot.id,
         )
