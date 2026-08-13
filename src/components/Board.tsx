@@ -32,7 +32,7 @@ import { clamp, dayTop, formatDayLabel, formatTime, snap, timeToY, yToTime } fro
 import { refEq } from '../lib/types'
 import type { CanvasBlock, ColorName, Ref, Rect, Snapshot, TravelMode } from '../lib/types'
 import type { Itinerary } from '../state/useItinerary'
-import { useTheme } from '../state/useTheme'
+import type { Theme } from '../state/useTheme'
 import { useViewport } from '../state/useViewport'
 import { CanvasBlockView, type ResizeDir } from './CanvasBlockView'
 import { ContextMenu, type MenuEntry } from './ContextMenu'
@@ -93,12 +93,13 @@ const isEditable = (el: EventTarget | null) => {
   return !!node && (node.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(node.tagName))
 }
 
-export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot: Snapshot }) {
+type BoardProps = { itinerary: Itinerary; snapshot: Snapshot; theme: Theme }
+
+export function Board({ itinerary, snapshot, theme }: BoardProps) {
   const { board, timeline, canvas, links } = snapshot
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const viewport = useViewport(viewportRef, contentRef, boardBounds(board.days, canvas))
-  const theme = useTheme()
 
   const [selection, setSelection] = useState<Ref[]>([])
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
@@ -1057,8 +1058,6 @@ export function Board({ itinerary, snapshot }: { itinerary: Itinerary; snapshot:
         mode={itinerary.mode}
         status={itinerary.status}
         zoom={viewport.scale}
-        theme={theme.mode}
-        onTheme={theme.setMode}
         onOpenBoard={(id) => void itinerary.openBoard(id)}
         onNewBoard={() => void itinerary.createBoard('Untitled itinerary', board.startDate)}
         onDeleteBoard={(id) => void itinerary.deleteBoard(id)}

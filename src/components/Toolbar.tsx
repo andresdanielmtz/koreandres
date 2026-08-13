@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BoardSummary } from '../lib/store'
 import type { SaveStatus } from '../state/useItinerary'
-import type { ThemeMode } from '../state/useTheme'
 import type { Board } from '../lib/types'
 import { IconCalendar, IconChevron, IconMinus, IconPlus, IconTarget, IconTrash } from './icons'
-import { ThemeToggle } from './ThemeToggle'
 
 type Props = {
   board: Board
@@ -12,8 +10,6 @@ type Props = {
   mode: 'cloud' | 'local'
   status: SaveStatus
   zoom: number
-  theme: ThemeMode
-  onTheme: (mode: ThemeMode) => void
   onOpenBoard: (id: string) => void
   onNewBoard: () => void
   onDeleteBoard: (id: string) => void
@@ -28,8 +24,6 @@ export function Toolbar({
   mode,
   status,
   zoom,
-  theme,
-  onTheme,
   onOpenBoard,
   onNewBoard,
   onDeleteBoard,
@@ -183,8 +177,6 @@ export function Toolbar({
         <button type="button" className="btn" onClick={onResetView} title="Reset view (0)">
           <IconTarget size={13} />
         </button>
-
-        <ThemeToggle mode={theme} onChange={onTheme} />
       </div>
     </header>
   )

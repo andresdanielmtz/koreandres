@@ -4,9 +4,18 @@ export type ThemeMode = 'system' | 'light' | 'dark'
 
 export const THEME_KEY = 'itinerary.theme'
 
+/**
+ * 
+ * @param v The version mode
+ * @returns a string indicating whether the mode is light, dark or declared by the system.
+ */
 const isMode = (v: string | null): v is ThemeMode =>
   v === 'system' || v === 'light' || v === 'dark'
 
+/**
+ * Retrieves the current
+ * @returns 
+ */
 function stored(): ThemeMode {
   const v = localStorage.getItem(THEME_KEY)
   return isMode(v) ? v : 'system'
@@ -42,3 +51,8 @@ export function useTheme() {
 
   return { mode, setMode, resolved }
 }
+
+/* Called once, in App, and passed down. Two copies would hold independent
+   React state — the shared truth is the `data-theme` attribute, not the hook. */
+export type Theme = ReturnType<typeof useTheme>
+

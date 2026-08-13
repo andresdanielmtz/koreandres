@@ -145,3 +145,19 @@ export const IconTarget = ({ size = 14 }: Props) => (
     <circle cx="8" cy="8" r="1.6" />
   </svg>
 )
+
+export const IconBoard = ({ size = 14 }: Props) => (
+  <svg {...base(size)}>
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+    <path d="M6 2.5v11M6 6.5h7.5M6 10h4.5" />
+  </svg>
+)
+
+/* Two cards, the back one fanned. The deck's own mark, used on the nav and on
+   every "take one". */
+export const IconCards = ({ size = 14 }: Props) => (
+  <svg {...base(size)}>
+    <rect x="5.5" y="3" width="8" height="10.5" rx="1.6" />
+    <path d="M3.6 11.6 2.6 5.2a1.6 1.6 0 0 1 1.3-1.8l1.6-.3" />
+  </svg>
+)
