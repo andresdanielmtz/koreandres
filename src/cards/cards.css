@@ -47,22 +47,35 @@
   white-space: nowrap;
 }
 
+/* The table and its shelf on the left, the seen deck down the right. */
 .cards-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.cards-main {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
   min-height: 0;
 }
 
 /* ------------------------------------------------------------ card table -- */
 
-/* The div CSS3DRenderer owns. React puts nothing in here; the scene appends
-   its own layer on mount and takes it away on unmount. */
 .card-table {
   position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+/* CSS3DRenderer's, exclusively. React renders nothing inside this element —
+   see the note in CardTable.tsx for what happens when it does. */
+.card-stage {
+  position: absolute;
+  inset: 0;
 }
 
 .card-table-empty {

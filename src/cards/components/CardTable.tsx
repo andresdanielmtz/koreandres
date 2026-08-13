@@ -3,9 +3,9 @@ import type { Card } from '../lib/types'
 import { CardFace } from './CardFace'
 
 type Props = {
-  /** The div the renderer appends its layer into. Owned by the section, which
-   *  is also where the scene is built — the host has to exist before the hook
-   *  that observes it runs. */
+  /** The div the renderer appends its layer into. Owned by `CardDesk`, which
+   *  is where the scene is built — the host has to exist before the hook that
+   *  observes it runs. */
   hostRef: React.RefObject<HTMLDivElement | null>
   /** The scene's portal targets: one element per card with an object in it. */
   mounted: { id: string; el: HTMLElement }[]
@@ -19,10 +19,18 @@ type Props = {
 }
 
 /**
- * The scene's host. `.card-table` is a bare div and React never touches the
- * subtree the renderer puts inside it. What React does own is the *content* of
- * each card, rendered through a portal into the element the scene made for it
- * — see the note at the top of `useCardScene.ts`.
+ * The scene's host.
+ *
+ * `.card-stage` is the renderer's and holds nothing React rendered; anything
+ * React draws over the table is a sibling of it, never a child. That
+ * separation is not tidiness — React and `CSS3DRenderer` both insert and
+ * remove children, and sharing one parent between them makes React try to
+ * remove a node whose parent has moved underneath it. It throws
+ * `removeChild: The node to be removed is not a child of this node`, and
+ * because there is no error boundary it takes the whole app down.
+ *
+ * The card *contents* are portalled into the elements the scene made for them,
+ * which is safe for the mirror-image reason — see the note in `useCardScene`.
  */
 export function CardTable({
   hostRef,
@@ -35,7 +43,9 @@ export function CardTable({
   onDiscard,
 }: Props) {
   return (
-    <div ref={hostRef} className="card-table">
+    <div className="card-table">
+      <div ref={hostRef} className="card-stage" />
+
       {!mounted.length && <div className="card-table-empty">{empty}</div>}
 
       {mounted.map((slot) => {
