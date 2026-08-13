@@ -32,7 +32,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
 
       # `tsc -b` runs inside this, so the typecheck is here and nowhere else.
       # No .env is written: building with no keys configured is a supported
