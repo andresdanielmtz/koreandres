@@ -9,6 +9,11 @@ export type { Point }
 /** Opens on 08:00 of day one rather than at midnight. */
 const INITIAL: View = { x: 320, y: -392, scale: 1 }
 
+/* Survives the board unmounting when the left rail switches to cards and back.
+   Still only ever written to the DOM — this is where the view *was*, not a
+   second source of truth for where it is. */
+let lastView: View | null = null
+
 /** Decelerating: leaves at the speed of the press and arrives settled. */
 const easeGlide = (t: number) => 1 - (1 - t) ** 3
 
@@ -35,11 +40,11 @@ export function useViewport(
   contentRef: React.RefObject<HTMLElement | null>,
   bounds: Bounds,
 ) {
-  const viewRef = useRef<View>(INITIAL)
+  const viewRef = useRef<View>(lastView ?? INITIAL)
   // Read inside pointer handlers, which outlive the render that started them.
   const boundsRef = useRef(bounds)
   const downRef = useRef(false)
-  const [scale, setScale] = useState(INITIAL.scale)
+  const [scale, setScale] = useState(viewRef.current.scale)
   const [panning, setPanning] = useState(false)
   const spaceRef = useRef(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
@@ -69,6 +74,7 @@ export function useViewport(
 
   function apply(next: View) {
     viewRef.current = contain(next)
+    lastView = viewRef.current
     paint()
     if (!syncing.current) {
       syncing.current = requestAnimationFrame(() => {
