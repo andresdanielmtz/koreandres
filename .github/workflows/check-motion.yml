@@ -1,0 +1,27 @@
+name: check-motion
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-motion-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check-motion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The script has no dependencies, so there is nothing to install and
+      # nothing to cache.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - run: npm run check:motion

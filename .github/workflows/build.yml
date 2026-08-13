@@ -1,0 +1,47 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      # 20.19 is the floor the README and Vite both state; 24 is what the app
+      # is developed on. Neither result tells you much without the other, so
+      # one failing leg doesn't cancel the other.
+      fail-fast: false
+      matrix:
+        node-version: ['20.19', '24']
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - run: npm ci
+
+      # `tsc -b` runs inside this, so the typecheck is here and nowhere else.
+      # No .env is written: building with no keys configured is a supported
+      # state, and this is what proves it stays one.
+      - run: npm run build
+
+      - uses: actions/upload-artifact@v7
+        if: matrix.node-version == '24'
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
