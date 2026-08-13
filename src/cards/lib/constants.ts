@@ -56,12 +56,18 @@ export const CARD_REFETCH_METRES = 400
  *  falls through to the text field rather than hanging on the gate. */
 export const CARD_LOCATE_TIMEOUT_MS = 8000
 
+/** How many photos a card shows, and how wide they are asked for. Wider than
+ *  the card so they stay sharp on a high-density screen; more than a handful
+ *  is a gallery, and a card is not one. */
+export const CARD_PHOTO_MAX = 6
+export const CARD_PHOTO_WIDTH = 800
+
 /* ---------------------------------------------------------------- motion -- */
 
 /** The card's size in CSS pixels. The camera is set so one world unit is one
  *  pixel, so these are also its size in the scene — they must match `.card`. */
-export const CARD_W = 248
-export const CARD_H = 344
+export const CARD_W = 320
+export const CARD_H = 452
 
 export const CARD_FOV = 45
 

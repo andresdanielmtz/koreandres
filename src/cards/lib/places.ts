@@ -8,7 +8,7 @@
  * being thrown. Nothing above this has to know what a Places error looks like.
  */
 import { loadMaps, placesError } from '../../lib/maps'
-import { CARD_DECK_MAX, CATEGORY_TYPES } from './constants'
+import { CARD_DECK_MAX, CARD_PHOTO_MAX, CARD_PHOTO_WIDTH, CATEGORY_TYPES } from './constants'
 import type { Card, CardCategory, CardLocation, CardsError } from './types'
 
 export async function searchDeck(
@@ -47,5 +47,30 @@ export async function searchDeck(
     })
   } catch (err: unknown) {
     return placesError(err, `${category} deck`)
+  }
+}
+
+/* ---------------------------------------------------------------- photos -- */
+
+/**
+ * A card's photos, fetched only when they are asked for.
+ *
+ * They are deliberately **not** persisted alongside the rest of the card. The
+ * SDK's `Photo` exposes `getURI()` and no resource name, and what comes back is
+ * a temporary signed URL — storing one in Supabase means a row that works today
+ * and 404s later. Google's terms cap caching of non-id place content at 30 days
+ * anyway. So this is a request per card per session, cached in memory by the
+ * caller, and the deck search doesn't pay for photos it may never show.
+ */
+export async function fetchPhotos(placeId: string): Promise<string[] | CardsError> {
+  try {
+    await loadMaps()
+    const place = new google.maps.places.Place({ id: placeId })
+    await place.fetchFields({ fields: ['photos'] })
+    return (place.photos ?? [])
+      .slice(0, CARD_PHOTO_MAX)
+      .map((p) => p.getURI({ maxWidth: CARD_PHOTO_WIDTH }))
+  } catch (err: unknown) {
+    return placesError(err, 'photos')
   }
 }

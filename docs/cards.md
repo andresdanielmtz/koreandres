@@ -105,6 +105,30 @@ has no dependencies, so the host div must exist on its very first render. An
 early return in front of the host — the location gate — leaves the effect with a
 null ref and no second chance.
 
+### Dragging
+
+The card's head (`.card-grip`) is a drag handle, the way a window's title bar
+is. The buttons and the Maps link below it are not, so a click on them stays a
+click.
+
+It reuses the board's plumbing exactly — window listeners, and nothing moves
+until the pointer clears **3px** of Manhattan distance. Deltas are cumulative
+from the grab and added to where the card already sat, so a drag can't
+accumulate rounding, and because one CSS pixel is one world unit the card keeps
+pace with the pointer 1:1. The scene's Y is up, so the screen delta is negated.
+
+`dragTo` writes and paints on the spot rather than starting a tween: this is the
+one move the pointer is holding, and **nothing the pointer is holding ever
+eases**. It also cancels any flight in progress, so grabbing a card mid-deal
+takes it over instead of fighting it.
+
+The offset is clamped to keep the whole card on the table, and re-clamped on
+resize. A window you can shove off the edge is a window you can lose — and Keep
+and Discard live at the bottom of this one, so pushing them past the table's
+`overflow: hidden` would strand the card with no way to answer it. The offset is
+cleared whenever the card is sent somewhere else; the pile is a pile whatever
+route the card took there.
+
 **Nothing in `cards.css` may put a `transition` or a `transform` on `.card`.**
 That element belongs to the renderer. The flip is done with two children,
 `.card-face[data-side='front']` and `[data-side='back']`, the back rotated 180°
@@ -119,6 +143,26 @@ rows. Three requests on a cold open, then none for a month.
 
 Kept cards are never evicted by a refill: `mergeCards` carries them through even
 when the search stops returning the place.
+
+## Photos are not stored, and can't be
+
+`fetchPhotos` runs when **Show photos** is pressed — one `Place.fetchFields`
+request per card, held in memory for the session by `CardDesk` so putting a card
+back and drawing it again doesn't pay twice.
+
+They are deliberately absent from `card_places`, and this is not an oversight to
+fix later:
+
+- The SDK's `Photo` exposes `getURI()` and **no resource name**, so there is no
+  stable handle to persist.
+- What `getURI()` returns is a temporary signed URL. A row written today 404s
+  later — a cache that rots into broken images is worse than no cache.
+- Google's terms cap caching of non-id place content at 30 days anyway. Place
+  **ids** may be kept indefinitely, which is exactly what `card_places` stores,
+  and is why re-fetching a photo from an id is cheap and correct.
+
+Photos are also not requested in the deck search, so a deck you never open
+photos on never pays for them.
 
 ## Storage
 
@@ -149,6 +193,8 @@ board table would answer "cloud" and then every card write would throw.
 | "Use my location" does nothing, or the gate seems stuck | Geolocation needs a secure origin — it is off over plain `http` — and a dismissed prompt never resolves. `CARD_LOCATE_TIMEOUT_MS` falls through to the text field, which is why that field is shown from the first frame rather than after a failure. |
 | `npm run build` can't find `three/addons/...` | `@types/three` is missing. `three` ships **no** bundled `.d.ts`; the types package is mandatory, and both route `three/addons/*` → `examples/jsm/*` through their `exports` maps. |
 | Cards stutter, drift, or jump on unrelated state changes | Something gave `.card` a `transition` or a `transform`. See the two rules above. |
+| The card doesn't keep pace with the pointer when dragged | `CARD_W`/`CARD_H` have drifted from `.card` in `cards.css`, or the camera distance was changed. One world unit is one CSS pixel only while those agree. |
+| Show photos says the key isn't enabled, but the decks fill | Photos are a `fetchFields` call rather than a search. Same enablement, so this usually means a key restriction that allows Nearby Search but not Place Details. |
 | `removeChild: The node to be removed is not a child of this node`, app goes blank | React rendered a child into an element the renderer also writes to. See rule 1. |
 | The whole section says "No Google Maps key" | `VITE_GOOGLE_MAPS_API_KEY` is unset. Card mode needs it for both the search and the typed fallback's geocoder. |
 
@@ -208,7 +254,13 @@ whoever adds one. In rough order of value:
     search for a category already in flight.
 16. `useCards(false)` never resolves a store or issues a search.
 
+17. `fetchPhotos` returns `'denied'` / `'failed'` the same way, and caps at
+    `CARD_PHOTO_MAX`.
+
 **The scene** is the least worth unit-testing and the most worth exercising in a
 browser: deal, keep, discard, a theme switch with a card on the table, a resize,
 and `prefers-reduced-motion: reduce`. Assert on `.card`'s inline `transform` and
-on the card count in the DOM rather than on pixels.
+on the card count in the DOM rather than on pixels. For the drag specifically:
+2px of pointer movement must not move the card and 3px must, the card must stay
+inside `.card-table`'s box however hard it is shoved, and Keep must still be
+visible afterwards.

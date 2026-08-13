@@ -1,6 +1,8 @@
 import { createPortal } from 'react-dom'
 import type { Card } from '../lib/types'
-import { CardFace } from './CardFace'
+import { CardFace, type PhotoState } from './CardFace'
+
+const IDLE: PhotoState = { kind: 'idle' }
 
 type Props = {
   /** The div the renderer appends its layer into. Owned by `CardDesk`, which
@@ -14,8 +16,12 @@ type Props = {
   /** True once the drawn card has landed, which is when it can be answered. */
   ready: boolean
   empty: React.ReactNode
+  /** Photos per card id, so a card put back and drawn again keeps them. */
+  photos: Map<string, PhotoState>
   onKeep: () => void
   onDiscard: () => void
+  onPhotos: (id: string) => void
+  onGrab: (e: React.PointerEvent, id: string) => void
 }
 
 /**
@@ -39,8 +45,11 @@ export function CardTable({
   drawn,
   ready,
   empty,
+  photos,
   onKeep,
   onDiscard,
+  onPhotos,
+  onGrab,
 }: Props) {
   return (
     <div className="card-table">
@@ -55,8 +64,11 @@ export function CardTable({
           <CardFace
             card={card}
             ready={ready && drawn === slot.id}
+            photos={photos.get(slot.id) ?? IDLE}
             onKeep={onKeep}
             onDiscard={onDiscard}
+            onPhotos={() => onPhotos(slot.id)}
+            onGrab={(e) => onGrab(e, slot.id)}
           />,
           slot.el,
           slot.id,

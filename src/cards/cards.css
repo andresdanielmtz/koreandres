@@ -92,9 +92,11 @@
 
 /* ------------------------------------------------------------------ card -- */
 
+/* Must match CARD_W / CARD_H in lib/constants.ts — the camera is set up so
+   one world unit is one CSS pixel, so these are the same number twice. */
 .card {
-  width: 248px;
-  height: 344px;
+  width: 320px;
+  height: 452px;
   /* The two faces are rotated relative to this one, so it has to keep depth. */
   transform-style: preserve-3d;
 }
@@ -104,7 +106,7 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   padding: 18px 18px 14px;
   border-radius: 12px;
   border: 1px solid var(--edge, var(--line-2));
@@ -112,6 +114,28 @@
   /* A card in the air genuinely floats, which is what the soft shadow is for. */
   box-shadow: var(--shadow);
   backface-visibility: hidden;
+}
+
+/* The head doubles as the drag handle, the way a window's title bar does. */
+.card-grip {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  cursor: grab;
+  /* The card is being moved by a transform; letting the pointer select the
+     name mid-drag turns a move into a text selection. */
+  user-select: none;
+  touch-action: none;
+}
+
+.cards-body[data-dragging] .card-grip {
+  cursor: grabbing;
+}
+
+/* Nothing eases while the pointer is holding it, so the whole app stops
+   answering hover paint mid-drag rather than flickering under the card. */
+.cards-body[data-dragging] {
+  user-select: none;
 }
 
 .card-face[data-side='back'] {
@@ -140,10 +164,92 @@
 }
 
 .card-where {
-  flex: 1;
   font-size: 12px;
   line-height: 1.45;
   color: var(--text-2);
+}
+
+.card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  font-size: 11.5px;
+  color: var(--ink, var(--accent));
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur) var(--ease);
+}
+
+.card-link:hover {
+  border-bottom-color: currentColor;
+}
+
+/* ---------------------------------------------------------- card photos -- */
+
+/* Takes the slack, so the actions stay pinned to the bottom edge whether the
+   photos are showing or not. Content flows from the top — the button sits
+   under the link it belongs with rather than floating above the actions. */
+.card-photos {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  padding-top: 2px;
+}
+
+.card-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.card-strip img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.card-photos-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.card-photos-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+  border-color: var(--line-3);
+}
+
+.card-photos-btn:disabled {
+  color: var(--text-3);
+  border-color: var(--line);
+  cursor: default;
+}
+
+.card-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-3);
 }
 
 .card-actions {

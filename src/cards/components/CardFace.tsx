@@ -1,6 +1,14 @@
+import { IconCards, IconExternal, IconNote } from '../../components/icons'
+import { mapsSearchUrl } from '../../lib/maps'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '../lib/constants'
 import type { Card } from '../lib/types'
-import { IconCards } from '../../components/icons'
+
+/** What the photos for this card are doing. */
+export type PhotoState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ready'; urls: string[] }
+  | { kind: 'failed'; denied: boolean }
 
 type Props = {
   card: Card
@@ -9,6 +17,9 @@ type Props = {
   /** False while the card is still flying in, so the buttons can't be pressed
    *  before it has landed. */
   ready: boolean
+  photos: PhotoState
+  onPhotos: () => void
+  onGrab: (e: React.PointerEvent) => void
 }
 
 /**
@@ -19,13 +30,58 @@ type Props = {
  * Nothing here sets a transform or a transition on the card itself — that
  * element belongs to `CSS3DRenderer`.
  */
-export function CardFace({ card, onKeep, onDiscard, ready }: Props) {
+export function CardFace({ card, onKeep, onDiscard, ready, photos, onPhotos, onGrab }: Props) {
+  const maps = card.url || mapsSearchUrl(card.name)
+
   return (
     <>
       <div className="card-face" data-side="front" data-color={CATEGORY_COLOR[card.category]}>
-        <span className="card-kind">{CATEGORY_LABEL[card.category]}</span>
-        <span className="card-name">{card.name}</span>
-        <span className="card-where">{card.where}</span>
+        {/* The whole head is the drag handle, the way a window's title bar is.
+            The buttons and the link below it are not, so a click on them still
+            reads as a click. */}
+        <div className="card-grip" onPointerDown={onGrab}>
+          <span className="card-kind">{CATEGORY_LABEL[card.category]}</span>
+          <span className="card-name">{card.name}</span>
+          <span className="card-where">{card.where}</span>
+        </div>
+
+        <a className="card-link" href={maps} target="_blank" rel="noreferrer">
+          <IconExternal size={12} />
+          Open in Google Maps
+        </a>
+
+        <div className="card-photos">
+          {photos.kind === 'ready' &&
+            (photos.urls.length ? (
+              <div className="card-strip">
+                {photos.urls.map((url) => (
+                  <img key={url} src={url} alt="" loading="lazy" />
+                ))}
+              </div>
+            ) : (
+              <p className="card-note">No photos for this one.</p>
+            ))}
+
+          {photos.kind === 'failed' && (
+            <p className="card-note">
+              {photos.denied
+                ? 'Photos need Places API (New) on the key.'
+                : 'Couldn’t load photos.'}
+            </p>
+          )}
+
+          {photos.kind !== 'ready' && (
+            <button
+              type="button"
+              className="card-photos-btn"
+              disabled={!ready || photos.kind === 'loading'}
+              onClick={onPhotos}
+            >
+              <IconNote size={12} />
+              {photos.kind === 'loading' ? 'Loading photos…' : 'Show photos'}
+            </button>
+          )}
+        </div>
 
         <div className="card-actions">
           <button type="button" className="btn" disabled={!ready} onClick={onDiscard}>
@@ -38,7 +94,7 @@ export function CardFace({ card, onKeep, onDiscard, ready }: Props) {
       </div>
 
       <div className="card-face" data-side="back" aria-hidden>
-        <IconCards size={34} />
+        <IconCards size={40} />
       </div>
     </>
   )
