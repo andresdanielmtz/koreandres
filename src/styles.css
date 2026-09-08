@@ -1609,6 +1609,16 @@ kbd {
   transform: translate(-100%, -50%);
 }
 
+/* Toolbar tips hang under their anchor instead of beside it — `top` is the
+   control's bottom edge and `left` its centre, or its right edge when flipped. */
+.tip[data-below] {
+  transform: translateX(-50%);
+}
+
+.tip[data-below][data-flip] {
+  transform: translateX(-100%);
+}
+
 .tip-title {
   font-size: 11.5px;
   font-weight: 500;

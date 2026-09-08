@@ -3,6 +3,7 @@ import type { BoardSummary } from '../lib/store'
 import type { SaveStatus } from '../state/useItinerary'
 import type { Board } from '../lib/types'
 import { IconCalendar, IconChevron, IconMinus, IconPlus, IconTarget, IconTrash } from './icons'
+import { ToolbarTooltip } from './ToolbarTooltip'
 
 type Props = {
   board: Board
@@ -32,6 +33,8 @@ export function Toolbar({
   onResetView,
 }: Props) {
   const [open, setOpen] = useState(false)
+  // The hovered control itself, so the tip can measure it. Null when none is.
+  const [tipAnchor, setTipAnchor] = useState<HTMLElement | null>(null)
   const pickerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -42,6 +45,13 @@ export function Toolbar({
     window.addEventListener('pointerdown', down)
     return () => window.removeEventListener('pointerdown', down)
   }, [open])
+
+  const statusHint =
+    status === 'error'
+      ? 'The last write to Supabase failed — see the browser console.'
+      : mode === 'local'
+        ? 'Saving to this browser only. Supabase is unreachable or supabase/schema.sql has not been run yet.'
+        : 'Changes are being saved to Supabase.'
 
   return (
     <header className="toolbar">
@@ -146,13 +156,8 @@ export function Toolbar({
           className="status"
           data-status={status}
           data-mode={mode}
-          title={
-            status === 'error'
-              ? 'The last write to Supabase failed — see the browser console.'
-              : mode === 'local'
-                ? 'Saving to this browser only. Supabase is unreachable or supabase/schema.sql has not been run yet.'
-                : 'Changes are being saved to Supabase.'
-          }
+          onPointerEnter={(e) => setTipAnchor(e.currentTarget)}
+          onPointerLeave={() => setTipAnchor(null)}
         >
           <i className="status-dot" />
           {status === 'error'
@@ -178,6 +183,8 @@ export function Toolbar({
           <IconTarget size={13} />
         </button>
       </div>
+
+      <ToolbarTooltip anchor={tipAnchor} text={statusHint} />
     </header>
   )
 }
